@@ -1,0 +1,59 @@
+{% extends 'incidencias/base.html' %}
+
+{% block title %}Mi Perfil - VecinosApp{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card card-custom p-4 bg-white">
+            <div class="text-center mb-4">
+                <i class="bi bi-person-circle text-primary" style="font-size: 3.5rem;"></i>
+                <h4 class="fw-bold mb-0">{{ user.get_full_name|default:user.username }}</h4>
+                <span class="text-muted small">@{{ user.username }}</span>
+                <div class="mt-2">
+                    {% if es_admin %}
+                        <span class="badge bg-warning text-dark px-3 py-1">Administrador del Sistema</span>
+                    {% else %}
+                        <span class="badge bg-primary px-3 py-1">Residente</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="list-group list-group-flush border-top border-bottom mb-4">
+                <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                    <span class="text-muted"><i class="bi bi-envelope me-2"></i>Correo Electrónico</span>
+                    <span class="fw-semibold">{{ user.email|default:"No registrado" }}</span>
+                </div>
+                {% if perfil %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                        <span class="text-muted"><i class="bi bi-building me-2"></i>Edificio</span>
+                        <span class="fw-semibold">{{ perfil.edificio.nombre }}</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                        <span class="text-muted"><i class="bi bi-geo-alt me-2"></i>Dirección</span>
+                        <span class="fw-semibold small text-end">{{ perfil.edificio.direccion }}</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                        <span class="text-muted"><i class="bi bi-door-closed me-2"></i>Ubicación</span>
+                        <span class="fw-semibold">Piso {{ perfil.piso }} - Puerta {{ perfil.puerta }}</span>
+                    </div>
+                {% else %}
+                    <div class="list-group-item py-3 text-center text-muted small">
+                        Este usuario tiene rol administrativo sin unidad residencial asignada.
+                    </div>
+                {% endif %}
+                <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                    <span class="text-muted"><i class="bi bi-calendar-check me-2"></i>Miembro desde</span>
+                    <span class="fw-semibold">{{ user.date_joined|date:"d/m/Y" }}</span>
+                </div>
+            </div>
+
+            <div class="text-center">
+                <a href="{% url 'incidencia_list' %}" class="btn btn-outline-primary px-4">
+                    <i class="bi bi-arrow-left me-1"></i> Ir a Incidencias
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,186 @@
+{% extends 'incidencias/base.html' %}
+
+{% block title %}Dashboard Estadístico - VecinosApp{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-speedometer2 text-primary me-2"></i>Dashboard Administrativo</h2>
+        <p class="text-muted mb-0">Métricas consolidadas de incidencias y estado operativo de los edificios.</p>
+    </div>
+    <div>
+        <a href="{% url 'incidencia_list' %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-list-task me-1"></i> Ver Listado
+        </a>
+    </div>
+</div>
+
+<!-- Tarjetas KPI -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card card-custom p-3 bg-white border-start border-primary border-4 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small text-uppercase fw-bold">Total Incidencias</div>
+                    <div class="fs-3 fw-bold text-dark">{{ total_general }}</div>
+                </div>
+                <i class="bi bi-ticket-detailed text-primary fs-1 opacity-50"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card card-custom p-3 bg-white border-start border-success border-4 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small text-uppercase fw-bold">Edificios Administrados</div>
+                    <div class="fs-3 fw-bold text-dark">{{ total_edificios }}</div>
+                </div>
+                <i class="bi bi-buildings text-success fs-1 opacity-50"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card card-custom p-3 bg-white border-start border-info border-4 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small text-uppercase fw-bold">Residentes Registrados</div>
+                    <div class="fs-3 fw-bold text-dark">{{ total_residentes }}</div>
+                </div>
+                <i class="bi bi-people text-info fs-1 opacity-50"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos con Chart.js -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card card-custom p-4 bg-white h-100 shadow-sm">
+            <h5 class="fw-bold mb-3"><i class="bi bi-pie-chart text-primary me-2"></i>Incidencias por Categoría</h5>
+            <div style="position: relative; height: 300px;">
+                <canvas id="categoriaChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card card-custom p-4 bg-white h-100 shadow-sm">
+            <h5 class="fw-bold mb-3"><i class="bi bi-bar-chart-line text-primary me-2"></i>Incidencias por Estado</h5>
+            <div style="position: relative; height: 300px;">
+                <canvas id="estadoChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Últimos Reportes Recibidos -->
+<div class="card card-custom p-4 bg-white shadow-sm">
+    <h5 class="fw-bold mb-3"><i class="bi bi-clock-history text-primary me-2"></i>Últimos Reportes Registrados</h5>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Título</th>
+                    <th>Residente</th>
+                    <th>Categoría</th>
+                    <th>Estado</th>
+                    <th>Fecha</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for inc in ultimas_incidencias %}
+                    <tr>
+                        <td class="fw-bold">#{{ inc.id }}</td>
+                        <td>{{ inc.titulo }}</td>
+                        <td>{{ inc.creador.first_name|default:inc.creador.username }}</td>
+                        <td><span class="badge bg-light text-dark border">{{ inc.get_categoria_display }}</span></td>
+                        <td><span class="badge badge-{{ inc.estado }}">{{ inc.get_estado_display }}</span></td>
+                        <td class="small text-muted">{{ inc.fecha_creacion|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <a href="{% url 'incidencia_detail' inc.id %}" class="btn btn-sm btn-outline-primary">
+                                Ver
+                            </a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-3">No hay incidencias recientes.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Cargar Chart.js en la parte inferior para garantizar disponibilidad -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // Parsear datos JSON seguros desde Django
+        const catLabels = JSON.parse('{{ cat_labels_json|escapejs }}');
+        const catCounts = JSON.parse('{{ cat_counts_json|escapejs }}');
+
+        const estLabels = JSON.parse('{{ est_labels_json|escapejs }}');
+        const estCounts = JSON.parse('{{ est_counts_json|escapejs }}');
+
+        // 1. Gráfico de Categorías (Doughnut)
+        const catCanvas = document.getElementById('categoriaChart');
+        if (catCanvas) {
+            new Chart(catCanvas, {
+                type: 'doughnut',
+                data: {
+                    labels: catLabels.length ? catLabels : ['Sin datos'],
+                    datasets: [{
+                        data: catCounts.length ? catCounts : [0],
+                        backgroundColor: ['#0d6efd', '#20c997', '#ffc107', '#dc3545', '#6f42c1', '#fd7e14'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        // 2. Gráfico de Estados (Bar)
+        const estCanvas = document.getElementById('estadoChart');
+        if (estCanvas) {
+            new Chart(estCanvas, {
+                type: 'bar',
+                data: {
+                    labels: estLabels.length ? estLabels : ['Sin datos'],
+                    datasets: [{
+                        label: 'Cantidad de Incidencias',
+                        data: estCounts.length ? estCounts : [0],
+                        backgroundColor: ['#ffc107', '#0dcaf0', '#198754', '#6c757d'],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            ticks: { 
+                                precision: 0,
+                                stepSize: 1
+                            } 
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
