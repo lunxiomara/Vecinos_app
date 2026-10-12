@@ -28,7 +28,7 @@ Servidor MySQL local (XAMPP o MySQL Server).
 
 1. Clonar el repositorio
 bash
-git clone <https://github.com/lunxiomara/Vecinos-App.git>
+git clone <https://github.com/lunxiomara/Vecinos_app.git>
 cd Vecinos_app
 2. Crear y activar el entorno virtual
 
