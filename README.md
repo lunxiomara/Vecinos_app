@@ -6,6 +6,7 @@ Características y Requerimientos Implementados
 Roles mediante Grupos de Django: Se establecieron dos grupos principales: Residente y Administrador.
 Registro de Residentes: Formulario de registro que asocia automáticamente al usuario con el grupo Residente y genera su perfil vinculado a su edificio, piso y número de departamento.
 Sesiones y Perfil: Funcionalidades de login, logout y visualización de perfil con datos del departamento.
+Protección de acceso: Después de 5 intentos fallidos, las cuentas no administrativas se bloquean por 1 hora; los administradores, el staff y los superusuarios no quedan bloqueados por este límite.
 2. Gestión de Incidencias (CRUD y Flujo de Trabajo)
 Creación: Formulario para residentes con validación de título (mínimo 10 caracteres), categoría (Agua, Electricidad, Limpieza, Seguridad, Otros), prioridad (Baja, Media, Alta), descripción detallada y carga opcional de imagen (máximo 2 MB).
 Flujo de Estados: Transición controlada: Pendiente -> En Proceso -> Resuelta -> Cerrada.
@@ -19,6 +20,18 @@ Notificaciones por Correo: Señales de Django (post_save) configuradas para envi
 Dashboard con Gráficos: Panel estadístico para administradores con gráficos interactivos usando Chart.js que muestran la distribución por categorías y estados.
 Paginación: Implementación con vistas basadas en clases (ListView) para ordenar los reportes.
 Panel de Administración: Personalización de admin.py con filtros avanzados, buscador, columnas informativas e historial de comentarios en línea.
+
+4. Eventos y notificaciones asíncronas (M5)
+Los cambios de estado y las alertas SLA se guardan en la tabla Outbox dentro de la misma transacción de base de datos. Celery procesa el correo y, si está configurado, envía un webhook firmado con clave de idempotencia. Los fallos se reintentan con espera exponencial y terminan en estado FAILED para revisión desde el panel de administración. Celery Beat recupera mensajes pendientes y revisa incidencias abiertas que superen el SLA de 24 horas (configurable con VECINOS_SLA_HOURS).
+
+Para ejecutar los workers se necesita Redis disponible en CELERY_BROKER_URL. En terminales separadas:
+
+```powershell
+celery -A vecinosapp worker -l info --pool=solo
+celery -A vecinosapp beat -l info
+```
+
+Opcionalmente, configure VECINOS_WEBHOOK_URL y VECINOS_WEBHOOK_SECRET para activar webhooks. La aplicación firma el cuerpo con HMAC-SHA256 e incluye Idempotency-Key. La outbox evita perder eventos ante fallos de base de datos o workers; la entrega externa de correo exactamente una vez también depende de que el proveedor de correo admita deduplicación, ya que SMTP por sí solo no ofrece esa garantía.
 
 
 Guía de Instalación y Puesta en Marcha

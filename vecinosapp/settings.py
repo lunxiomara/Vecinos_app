@@ -10,6 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
+from datetime import timedelta
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -37,7 +39,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Terceros
     'django_filters',
+    'rules',
+    'axes',
+    'django_otp',
+    'django_otp.plugins.otp_totp',
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'drf_spectacular',
+    # Proyecto
     'incidencias',
 ]
 
@@ -47,8 +58,11 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django_otp.middleware.OTPMiddleware',                          # 2FA
+    'axes.middleware.AxesMiddleware',                               # bloqueo de intentos
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'incidencias.middleware.EdificioActivoMiddleware',              # edificio activo
 ]
 
 ROOT_URLCONF = 'vecinosapp.urls'
@@ -70,6 +84,20 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'vecinosapp.wsgi.application'
 
+# ─── Backends de autenticación (django-rules + Django clásico) ───────────────
+AUTHENTICATION_BACKENDS = [
+    'rules.permissions.ObjectPermissionBackend',  # rules 3.x
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# ─── django-axes (bloqueo de intentos de login) ──────────────────────────────
+AXES_FAILURE_LIMIT          = 5      # bloquear tras 5 intentos fallidos
+AXES_COOLOFF_TIME           = 1      # 1 hora de bloqueo
+AXES_LOCKOUT_TEMPLATE       = None   # usará la vista por defecto
+AXES_RESET_ON_SUCCESS       = True   # desbloquear al hacer login correcto
+AXES_WHITELIST_CALLABLE      = 'incidencias.auth.axes_whitelist_admin'
+
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
@@ -77,9 +105,9 @@ WSGI_APPLICATION = 'vecinosapp.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'vecinos_db',
+        'NAME': 'vecinos',
         'USER': 'root',
-        'PASSWORD': '12345', 
+        'PASSWORD': '',  # MariaDB XAMPP sin contraseña
         'HOST': 'localhost',
         'PORT': '3306',
     }
@@ -136,3 +164,56 @@ LOGOUT_REDIRECT_URL = 'login'
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'vecinosapp@admin.com'
 
+# ─── Django REST Framework (M4) ─────────────────────────────────────────────
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Vecinos App API REST',
+    'DESCRIPTION': 'API de producción para la plataforma multi-edificio de incidencias con control de concurrencia e idempotencia.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
+
+# ─── Eventos asíncronos (M5) ────────────────────────────────────────────────
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_PUBLISH_RETRY = True
+CELERY_TASK_PUBLISH_RETRY_POLICY = {
+    'max_retries': 3,
+    'interval_start': 0,
+    'interval_step': 0.2,
+    'interval_max': 1,
+}
+VECINOS_SLA_HOURS = int(os.environ.get('VECINOS_SLA_HOURS', '24'))
+CELERY_BEAT_SCHEDULE = {
+    'requeue-outbox-messages': {
+        'task': 'incidencias.requeue_pending_outbox',
+        'schedule': timedelta(seconds=30),
+    },
+    'check-incidence-sla': {
+        'task': 'incidencias.check_sla_breaches',
+        'schedule': timedelta(minutes=5),
+    },
+}
