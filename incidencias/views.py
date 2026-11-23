@@ -330,19 +330,19 @@ class DashboardAdminView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
             total_residentes = 0
 
         # Estadísticas por Categoría
-        por_categoria = list(base_qs.values('categoria').annotate(total=Count('id')))
+        por_categoria = list(base_qs.values('categoria').annotate(total=Count('id_incid')))
         nombres_cat = dict(Incidencia.CATEGORIAS)
         cat_labels = [nombres_cat.get(item['categoria'], item['categoria']) for item in por_categoria]
         cat_counts = [item['total'] for item in por_categoria]
 
         # Estadísticas por Estado
-        por_estado = list(base_qs.values('estado').annotate(total=Count('id')))
+        por_estado = list(base_qs.values('estado').annotate(total=Count('id_incid')))
         nombres_est = dict(Incidencia.ESTADOS)
         est_labels = [nombres_est.get(item['estado'], item['estado']) for item in por_estado]
         est_counts = [item['total'] for item in por_estado]
 
         # Estadísticas por Prioridad
-        por_prioridad = list(base_qs.values('prioridad').annotate(total=Count('id')))
+        por_prioridad = list(base_qs.values('prioridad').annotate(total=Count('id_incid')))
         nombres_prio = dict(Incidencia.PRIORIDADES)
         prio_labels = [nombres_prio.get(item['prioridad'], item['prioridad']) for item in por_prioridad]
         prio_counts = [item['total'] for item in por_prioridad]

@@ -50,7 +50,7 @@ class EventoIncidenciaInline(admin.TabularInline):
 # ─────────────────────────────────────────────
 @admin.register(Incidencia)
 class IncidenciaAdmin(admin.ModelAdmin):
-    list_display   = ('id', 'titulo', 'edificio', 'creador', 'estado', 'prioridad', 'fecha_creacion')
+    list_display   = ('id_incid', 'titulo', 'edificio', 'creador', 'estado', 'prioridad', 'fecha_creacion')
     list_filter    = ('edificio', 'estado', 'prioridad', 'categoria')
     search_fields  = ('titulo', 'descripcion', 'creador__username')
     readonly_fields = ('fecha_creacion', 'fecha_actualizacion')

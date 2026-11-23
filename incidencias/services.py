@@ -8,7 +8,7 @@ de concurrencia pesimista (select_for_update) y optimista (campo version).
 
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from .models import Incidencia, EventoIncidencia
+from .models import Incidencia, EventoIncidencia, OutboxMessage
 
 
 class ConcurrencyError(Exception):
@@ -31,7 +31,7 @@ def asignar_tecnico(incidencia_id: int, nombre_tecnico: str, actor, version_espe
     """
     with transaction.atomic():
         # Bloqueo a nivel de fila en la base de datos (Pessimistic Lock)
-        incidencia = Incidencia.objects.select_for_update().get(id=incidencia_id)
+        incidencia = Incidencia.objects.select_for_update().get(id_incid=incidencia_id)
 
         # Control de concurrencia optimista opcional
         if version_esperada is not None and incidencia.version != version_esperada:
@@ -64,7 +64,7 @@ def cambiar_estado(incidencia_id: int, nuevo_estado: str, actor, detalle: str = 
     Aplica BLOQUEO PESIMISTA y valida contra Incidencia.TRANSICIONES_VALIDAS.
     """
     with transaction.atomic():
-        incidencia = Incidencia.objects.select_for_update().get(id=incidencia_id)
+        incidencia = Incidencia.objects.select_for_update().get(id_incid=incidencia_id)
 
         # Validación de versión optimista
         if version_esperada is not None and incidencia.version != version_esperada:
@@ -95,6 +95,24 @@ def cambiar_estado(incidencia_id: int, nuevo_estado: str, actor, detalle: str = 
             estado_despues=nuevo_estado,
             detalle=detalle or f"Cambio de estado de {estado_anterior} a {nuevo_estado}"
         )
+        estados_map = dict(Incidencia.ESTADOS)
+        creador = incidencia.creador
+        outbox_msg = OutboxMessage.objects.create(
+            tipo_evento="incidencia.estado_cambiado",
+                    payload={
+                        "incidencia_id":incidencia.pk,
+                        "titulo": incidencia.titulo,
+                        "estado_anterior": estado_anterior,
+                        "estado_nuevo": nuevo_estado,
+                        "estado_nuevo_display": estados_map.get(nuevo_estado, nuevo_estado),
+                        "destinatario": creador.email if creador else "",
+                         "nombre_destinatario": creador.username if creador else "",
+                    },
+        )
+
+        from .tasks import dispatch_outbox_message
+
+        transaction.on_commit(lambda msg_id=outbox_msg.pk: dispatch_outbox_message.delay(msg_id))
 
         return incidencia
 

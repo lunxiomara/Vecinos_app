@@ -8,6 +8,7 @@ from django.utils import timezone
 # EDIFICIO (entidad raíz del multi-tenancy)
 # ─────────────────────────────────────────────
 class Edificio(models.Model):
+    id_edif   = models.AutoField(primary_key=True)
     nombre    = models.CharField(max_length=100)
     direccion = models.CharField(max_length=200)
 
@@ -23,6 +24,7 @@ class Edificio(models.Model):
 # UNIDAD (apartamento / unidad residencial)
 # ─────────────────────────────────────────────
 class Unidad(models.Model):
+    id_unit  = models.AutoField(primary_key=True)
     edificio = models.ForeignKey(Edificio, on_delete=models.CASCADE, related_name='unidades')
     numero   = models.CharField(max_length=20, help_text="Ej: 101, PH-2, Local-3")
     piso     = models.CharField(max_length=10)
@@ -41,6 +43,7 @@ class Unidad(models.Model):
 # PERFIL (extiende User con rol y ubicación)
 # ─────────────────────────────────────────────
 class Perfil(models.Model):
+    id_prfl  = models.AutoField(primary_key=True)
     ROL_CHOICES = [
         ('residente',     'Residente'),
         ('administrador', 'Administrador de edificio'),
@@ -114,6 +117,7 @@ class IncidenciaPorEdificioManager(models.Manager):
 # INCIDENCIA
 # ─────────────────────────────────────────────
 class Incidencia(models.Model):
+    id_incid  = models.AutoField(primary_key=True)
     CATEGORIAS = [
         ('agua',          'Agua'),
         ('electricidad',  'Electricidad'),
@@ -183,7 +187,7 @@ class Incidencia(models.Model):
         verbose_name_plural = "Incidencias"
         ordering            = ['-fecha_creacion']
         indexes = [
-            # Índice compuesto principal: acelera listados y filtros por edificio y estado
+            # indice compuesto principal: acelera listados y filtros por edificio y estado
             models.Index(fields=['edificio', 'estado', '-fecha_creacion'], name='idx_inc_edif_est_fecha'),
             # Índice compuesto para el panel de indicadores (M3 & M6)
             models.Index(fields=['edificio', 'prioridad'], name='idx_inc_edif_prio'),
@@ -203,13 +207,13 @@ class Incidencia(models.Model):
         ]
 
     def __str__(self):
-        return f"#{self.id} - {self.titulo} ({self.get_estado_display()})"
+        return f"#{self.id_incid} - {self.titulo} ({self.get_estado_display()})"
 
     @property
     def puede_editar_residente(self):
         return self.estado == 'pendiente'
 
-    # ── Máquina de estados ───────────────────────────
+    # ── Maquina de estados ───────────────────────────
     TRANSICIONES_VALIDAS = {
         'pendiente': ['proceso'],
         'proceso':   ['resuelta', 'pendiente'],
@@ -225,6 +229,7 @@ class Incidencia(models.Model):
 # EVENTO DE INCIDENCIA (historial inmutable)
 # ─────────────────────────────────────────────
 class EventoIncidencia(models.Model):
+    id_evinc = models.AutoField(primary_key=True)
     TIPOS_EVENTO = [
         ('creacion',          'Creación'),
         ('cambio_estado',     'Cambio de estado'),
