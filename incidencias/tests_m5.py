@@ -54,7 +54,8 @@ class OutboxTransaccionalTests(TestCase):
                     actor=self.admin,
                 )
 
-        message = OutboxMessage.objects.get()
+        message = OutboxMessage.objects.filter(tipo_evento="incidencia.estado_cambiado").order_by("-pk").first()
+        self.assertIsNotNone(message)
         self.incidencia.refresh_from_db()
         self.assertEqual(self.incidencia.estado, "proceso")
         self.assertEqual(message.tipo_evento, "incidencia.estado_cambiado")

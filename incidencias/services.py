@@ -58,21 +58,14 @@ def asignar_tecnico(incidencia_id: int, nombre_tecnico: str, actor, version_espe
 
 
 def cambiar_estado(incidencia_id: int, nuevo_estado: str, actor, detalle: str = '', version_esperada: int = None) -> Incidencia:
-    """
-    Caso de uso: Transición de estado con máquina de estados estricta y auditoría.
-    
-    Aplica BLOQUEO PESIMISTA y valida contra Incidencia.TRANSICIONES_VALIDAS.
-    """
     with transaction.atomic():
         incidencia = Incidencia.objects.select_for_update().get(id_incid=incidencia_id)
 
-        # Validación de versión optimista
         if version_esperada is not None and incidencia.version != version_esperada:
             raise ConcurrencyError(
                 f"La incidencia #{incidencia_id} fue modificada por otro usuario mientras la editabas."
             )
 
-        # Validación estricta de la máquina de estados
         if not incidencia.puede_transicionar_a(nuevo_estado):
             raise TransicionInvalidaError(
                 f"Transición inválida: no se puede pasar de '{incidencia.estado}' a '{nuevo_estado}'."
@@ -86,7 +79,6 @@ def cambiar_estado(incidencia_id: int, nuevo_estado: str, actor, detalle: str = 
         incidencia._actor_username = getattr(actor, 'username', 'sistema')
         incidencia.save(update_fields=['estado', 'version', 'fecha_actualizacion'])
 
-        # Registro inmutable de auditoría
         EventoIncidencia.objects.create(
             incidencia=incidencia,
             tipo=tipo_evento,
@@ -95,28 +87,10 @@ def cambiar_estado(incidencia_id: int, nuevo_estado: str, actor, detalle: str = 
             estado_despues=nuevo_estado,
             detalle=detalle or f"Cambio de estado de {estado_anterior} a {nuevo_estado}"
         )
-        estados_map = dict(Incidencia.ESTADOS)
-        creador = incidencia.creador
-        outbox_msg = OutboxMessage.objects.create(
-            tipo_evento="incidencia.estado_cambiado",
-                    payload={
-                        "incidencia_id":incidencia.pk,
-                        "titulo": incidencia.titulo,
-                        "estado_anterior": estado_anterior,
-                        "estado_nuevo": nuevo_estado,
-                        "estado_nuevo_display": estados_map.get(nuevo_estado, nuevo_estado),
-                        "destinatario": creador.email if creador else "",
-                         "nombre_destinatario": creador.username if creador else "",
-                    },
-        )
-
-        from .tasks import dispatch_outbox_message
-
-        transaction.on_commit(lambda msg_id=outbox_msg.pk: dispatch_outbox_message.delay(msg_id))
 
         return incidencia
 
-
+    
 def reabrir_incidencia(incidencia_id: int, actor, motivo: str) -> Incidencia:
     """Caso de uso específico para reapertura de incidencias resueltas."""
     return cambiar_estado(

@@ -115,7 +115,7 @@ class ConcurrenciaSelectForUpdateTest(TransactionTestCase):
                 barrera.wait(timeout=5)  # Espera a que los 20 hilos estén listos
                 nombre_tecnico = f"Técnico_HILO_{thread_idx}"
                 asignar_tecnico(
-                    incidencia_id=self.incidencia.id,
+                    incidencia_id=self.incidencia.id_incid,
                     nombre_tecnico=nombre_tecnico,
                     actor=self.admin
                 )
@@ -170,7 +170,7 @@ class BloqueoOptimistaYTransicionesTest(TestCase):
         # Usuario A intenta guardar creyendo que la versión era 1
         with self.assertRaises(ConcurrencyError):
             cambiar_estado(
-                incidencia_id=self.incidencia.id,
+                incidencia_id=self.incidencia.id_incid,
                 nuevo_estado='proceso',
                 actor=self.user,
                 version_esperada=1  # Ya no es 1
@@ -180,15 +180,15 @@ class BloqueoOptimistaYTransicionesTest(TestCase):
         """No se puede saltar directamente de pendiente a cerrada."""
         with self.assertRaises(TransicionInvalidaError):
             cambiar_estado(
-                incidencia_id=self.incidencia.id,
-                nuevo_estado='cerrada',  # Inválido desde pendiente
+                incidencia_id=self.incidencia.id_incid,
+                nuevo_estado='cerrada',  # Invalido desde pendiente
                 actor=self.user
             )
 
     def test_transicion_valida_actualiza_version_y_auditoria(self):
         """Transición válida: pendiente -> proceso."""
         inc = cambiar_estado(
-            incidencia_id=self.incidencia.id,
+            incidencia_id=self.incidencia.id_incid,
             nuevo_estado='proceso',
             actor=self.user
         )

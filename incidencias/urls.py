@@ -18,4 +18,7 @@ urlpatterns = [
 
     # Bonus: Dashboard de métricas para Admin
     path('dashboard/', views.DashboardAdminView.as_view(), name='dashboard'),
+
+    # Observabilidad: Estado de trazas y métricas
+    path('observabilidad/', views.panel_observabilidad, name='observabilidad'),
 ]

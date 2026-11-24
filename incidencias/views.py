@@ -1,4 +1,5 @@
 import json
+import time
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView
@@ -9,11 +10,12 @@ from django.contrib import messages
 from django.db.models import Count
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
+from django.http import HttpResponseNotFound
 
 from .models import Incidencia, Comentario, Perfil, Edificio, EventoIncidencia
 from .forms import RegistroForm, IncidenciaResidenteForm, IncidenciaAdminForm, ComentarioForm
 from .filters import IncidenciaFilter
-
+from .observabilidad import obtener_estado_observabilidad, reiniciar_observabilidad 
 
 def es_administrador(user):
     """Verifica si el usuario tiene rol de administrador o es superusuario."""
@@ -372,3 +374,18 @@ class PerfilView(LoginRequiredMixin, TemplateView):
         context['perfil'] = perfil
         context['es_admin'] = es_administrador(self.request.user)
         return context
+
+def panel_observabilidad(request):
+    if request.GET.get('reiniciar') == '1':
+        reiniciar_observabilidad()
+        return redirect('observabilidad')
+
+    if request.GET.get('simular') == 'lenta':
+        time.sleep(0.3)
+        return redirect('observabilidad')
+
+    if request.GET.get('simular') == 'error':
+        return HttpResponseNotFound("Simulación de error 404 para pruebas de observabilidad.")
+    
+    contexto = obtener_estado_observabilidad()
+    return render(request, 'incidencias/panel_observabilidad.html', contexto)

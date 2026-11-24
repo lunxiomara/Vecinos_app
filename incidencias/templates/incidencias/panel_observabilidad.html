@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Panel de Observabilidad — VecinosApp</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 24px; background: #f5f7fa; color: #1f2937; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+        .acciones a { display: inline-block; padding: 8px 14px; margin-left: 6px; text-decoration: none; border-radius: 6px; font-size: 14px; background: #2563eb; color: #fff; }
+        .acciones a.inicio { background: #16a34a; }
+        .acciones a.warn { background: #d97706; }
+        .acciones a.sec { background: #4b5563; }
+        .alerta { padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; }
+        .alerta.activa { background: #fee2e2; color: #991b1b; border: 1px solid #ef4444; }
+        .alerta.ok { background: #dcfce7; color: #166534; border: 1px solid #22c55e; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; margin-bottom: 24px; }
+        .card { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .card .label { font-size: 12px; color: #6b7280; text-transform: uppercase; }
+        .card .valor { font-size: 24px; font-weight: bold; margin-top: 6px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+        th { background: #111827; color: #fff; }
+        .badge-alerta { background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .badge-ok { background: #e5e7eb; color: #374151; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <h1>Panel de Observabilidad — Trazas, Métricas y Alertas</h1>
+        <div class="acciones">
+            <a href="{% url 'incidencia_list' %}" class="inicio">← Volver al inicio</a>
+            <a href="?simular=lenta" class="warn">Simular latencia (&gt; {{ umbral_latencia_ms }} ms)</a>
+            <a href="?simular=error" class="warn">Simular error 404</a>
+            <a href="?reiniciar=1" class="sec">Reiniciar</a>
+        </div>
+    </div>
+
+    {% if alerta_activa %}
+        <div class="alerta activa">
+            ALERTA DISPARADA:
+            {% if ultima_alerta %}
+                {{ ultima_alerta.motivo }} en <code>{{ ultima_alerta.ruta }}</code> ({{ ultima_alerta.timestamp }})
+            {% else %}
+                Se detectaron eventos fuera del umbral configurado ({{ umbral_latencia_ms }} ms).
+            {% endif %}
+        </div>
+    {% else %}
+        <div class="alerta ok">
+            Estado normal: sin alertas disparadas (umbral de latencia: {{ umbral_latencia_ms }} ms).
+        </div>
+    {% endif %}
+
+    <div class="grid">
+        <div class="card"><div class="label">Peticiones</div><div class="valor">{{ metricas.total_peticiones }}</div></div>
+        <div class="card"><div class="label">Promedio (ms)</div><div class="valor">{{ metricas.promedio_duracion_ms }}</div></div>
+        <div class="card"><div class="label">Máximo (ms)</div><div class="valor">{{ metricas.max_duracion_ms }}</div></div>
+        <div class="card"><div class="label">Peticiones lentas</div><div class="valor">{{ metricas.total_lentas }}</div></div>
+        <div class="card"><div class="label">Errores (HTTP 4xx/5xx)</div><div class="valor">{{ metricas.total_errores }}</div></div>
+        <div class="card"><div class="label">Alertas disparadas</div><div class="valor">{{ metricas.alertas_disparadas }}</div></div>
+    </div>
+
+    <h2>Trazas recientes</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Hora</th>
+                <th>Método</th>
+                <th>Ruta</th>
+                <th>Estado</th>
+                <th>Duración (ms)</th>
+                <th>Usuario</th>
+                <th>Alerta</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in trazas %}
+                <tr>
+                    <td>{{ t.timestamp }}</td>
+                    <td>{{ t.metodo }}</td>
+                    <td>{{ t.ruta }}</td>
+                    <td>{{ t.status }}</td>
+                    <td>{{ t.duracion_ms }}</td>
+                    <td>{{ t.usuario }}</td>
+                    <td>
+                        {% if t.alerta_disparada %}
+                            <span class="badge-alerta">{{ t.motivo_alerta }}</span>
+                        {% else %}
+                            <span class="badge-ok">Normal</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="7">Aún no hay trazas registradas. Navega por la app o usa los botones de simulación.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

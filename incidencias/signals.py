@@ -5,9 +5,9 @@ from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 from .models import Incidencia, OutboxMessage
 
+
 @receiver(pre_save, sender=Incidencia)
 def registrar_estado_previo(sender, instance, using, update_fields=None, **kwargs):
-    """Guarda el estado anterior antes de guardar para detectar cambios."""
     if update_fields is not None and 'estado' not in update_fields:
         instance._estado_previo = None
         return
@@ -20,9 +20,9 @@ def registrar_estado_previo(sender, instance, using, update_fields=None, **kwarg
     else:
         instance._estado_previo = None
 
+
 @receiver(post_save, sender=Incidencia)
 def encolar_notificacion_cambio_estado(sender, instance, created, using, update_fields=None, **kwargs):
-    """Persiste el evento junto con el cambio antes de programar su despacho."""
     estado_previo = getattr(instance, '_estado_previo', None)
     if created or estado_previo is None or estado_previo == instance.estado:
         return

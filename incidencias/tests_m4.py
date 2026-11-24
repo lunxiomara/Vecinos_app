@@ -52,7 +52,7 @@ class ApiIdempotenciaTest(TestCase):
         self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
         self.assertEqual(res1.headers.get('X-Idempotent-Replay'), 'false')
         self.assertEqual(Incidencia.objects.filter(edificio=self.edificio).count(), 1)
-        incidencia_id = res1.data['id']
+        incidencia_id = res1.data['id_incid']
 
         # ── 2. Segunda petición (reintento por fallo simulado de red) 
         res2 = self.client.post(self.url, payload, HTTP_IDEMPOTENCY_KEY=idempotency_key, format='json')
@@ -61,7 +61,7 @@ class ApiIdempotenciaTest(TestCase):
 
         # Comprobación de oro: NO se duplicó la incidencia
         self.assertEqual(Incidencia.objects.filter(edificio=self.edificio).count(), 1)
-        self.assertEqual(res2.data['id'], incidencia_id)
+        self.assertEqual(res2.data['id_incid'], incidencia_id)
 
 
 class ApiAislamientoEdificioTest(TestCase):
@@ -90,17 +90,17 @@ class ApiAislamientoEdificioTest(TestCase):
     def test_residente_b_recibe_404_al_consultar_incidencia_de_a_en_api(self):
         """El residente del edificio B debe recibir 404 al intentar GET /api/v1/incidencias/{id_a}/"""
         self.client.force_authenticate(user=self.res_b)
-        url = f'/api/v1/incidencias/{self.inc_a.id}/'
+        url = f'/api/v1/incidencias/{self.inc_a.id_incid}/'
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_residente_a_recibe_200_en_su_propia_incidencia(self):
         """El creador en el edificio A recibe 200 con su detalle."""
         self.client.force_authenticate(user=self.res_a)
-        url = f'/api/v1/incidencias/{self.inc_a.id}/'
+        url = f'/api/v1/incidencias/{self.inc_a.id_incid}/'
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['id'], self.inc_a.id)
+        self.assertEqual(response.data['id_incid'], self.inc_a.id_incid)
 
 
 class ApiAutenticacionYDocumentacionTest(TestCase):

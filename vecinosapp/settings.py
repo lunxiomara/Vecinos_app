@@ -62,7 +62,8 @@ MIDDLEWARE = [
     'axes.middleware.AxesMiddleware',                               # bloqueo de intentos
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'incidencias.middleware.EdificioActivoMiddleware',              # edificio activo
+    'incidencias.middleware.EdificioActivoMiddleware',            # edificio activo
+    'incidencias.observabilidad.ObservabilidadMiddleware',                 # trazas y métricas
 ]
 
 ROOT_URLCONF = 'vecinosapp.urls'

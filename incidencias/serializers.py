@@ -14,7 +14,7 @@ from .models import Edificio, Unidad, Perfil, Incidencia, Comentario, EventoInci
 class EdificioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Edificio
-        fields = ['id', 'nombre', 'direccion']
+        fields = ['id_edif', 'nombre', 'direccion']
 
 
 class CreadorSerializer(serializers.ModelSerializer):
@@ -34,7 +34,7 @@ class EventoIncidenciaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EventoIncidencia
-        fields = ['id', 'tipo', 'actor_username', 'estado_antes', 'estado_despues', 'detalle', 'fecha']
+        fields = ['id_evinc', 'tipo', 'actor_username', 'estado_antes', 'estado_despues', 'detalle', 'fecha']
 
 
 class ComentarioSerializer(serializers.ModelSerializer):
@@ -51,7 +51,6 @@ class ComentarioSerializer(serializers.ModelSerializer):
 
 
 class IncidenciaListSerializer(serializers.ModelSerializer):
-    """Serializador optimizado para listados y filtros paginados."""
     creador = CreadorSerializer(read_only=True)
     edificio = EdificioSerializer(read_only=True)
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
@@ -60,14 +59,13 @@ class IncidenciaListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Incidencia
         fields = [
-            'id', 'titulo', 'categoria', 'prioridad', 'prioridad_display',
+            'id_incid', 'titulo', 'categoria', 'prioridad', 'prioridad_display',
             'estado', 'estado_display', 'tecnico_asignado', 'creador',
             'edificio', 'version', 'fecha_creacion', 'fecha_actualizacion'
         ]
 
 
 class IncidenciaDetailSerializer(serializers.ModelSerializer):
-    """Serializador detallado con eventos inmutables y comentarios asociados."""
     creador = CreadorSerializer(read_only=True)
     edificio = EdificioSerializer(read_only=True)
     comentarios = ComentarioSerializer(many=True, read_only=True)
@@ -76,7 +74,7 @@ class IncidenciaDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Incidencia
         fields = [
-            'id', 'titulo', 'descripcion', 'categoria', 'prioridad',
+            'id_incid', 'titulo', 'descripcion', 'categoria', 'prioridad',
             'estado', 'tecnico_asignado', 'foto', 'nota_interna',
             'creador', 'edificio', 'version', 'fecha_creacion',
             'fecha_actualizacion', 'comentarios', 'eventos'
@@ -84,10 +82,9 @@ class IncidenciaDetailSerializer(serializers.ModelSerializer):
 
 
 class IncidenciaCreateSerializer(serializers.ModelSerializer):
-    """Serializador para reportar nuevas incidencias con validación segura."""
     class Meta:
         model = Incidencia
-        fields = ['id', 'titulo', 'descripcion', 'categoria', 'prioridad', 'foto']
+        fields = ['id_incid', 'titulo', 'descripcion', 'categoria', 'prioridad', 'foto']
 
     def validate_titulo(self, value):
         if len(value.strip()) < 10:
@@ -110,7 +107,6 @@ class IncidenciaCreateSerializer(serializers.ModelSerializer):
 
         incidencia = super().create(validated_data)
 
-        # Evento inmutable de auditoría
         EventoIncidencia.objects.create(
             incidencia=incidencia,
             tipo='creacion',
