@@ -1,0 +1,138 @@
+{% extends 'incidencias/base.html' %}
+
+{% block title %}Gestión de Técnicos y Disponibilidad - VecinosApp{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+        <h2 class="fw-bold mb-1 text-dark">
+            <i class="bi bi-tools text-primary me-2"></i>Técnicos para Arreglos y Reparaciones
+        </h2>
+        <p class="text-muted small mb-0">Asignación y monitoreo de especialistas según su disponibilidad en tiempo real.</p>
+    </div>
+    {% if es_admin %}
+    <div>
+        <a href="{% url 'tecnico_create' %}" class="btn btn-primary btn-sm shadow-sm">
+            <i class="bi bi-person-plus-fill me-1"></i> Registrar Nuevo Técnico
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Tarjetas Resumen de Disponibilidad -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="kpi-card border-start border-primary border-4">
+            <div class="text-uppercase small fw-bold text-muted mb-1">Total Especialistas</div>
+            <div class="fs-3 fw-bold text-dark">{{ total_tecnicos }}</div>
+            <div class="small text-muted"><i class="bi bi-people me-1"></i> En catálogo general</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="kpi-card border-start border-success border-4">
+            <div class="text-uppercase small fw-bold text-muted mb-1">Disponibles Ahora</div>
+            <div class="fs-3 fw-bold text-success">{{ total_disponibles }}</div>
+            <div class="small text-muted"><i class="bi bi-check-circle me-1"></i> Listos para asignación</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="kpi-card border-start border-warning border-4">
+            <div class="text-uppercase small fw-bold text-muted mb-1">Ocupados en Reparaciones</div>
+            <div class="fs-3 fw-bold text-warning">{{ total_ocupados }}</div>
+            <div class="small text-muted"><i class="bi bi-hammer me-1"></i> Atendiendo incidencias</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="kpi-card border-start border-secondary border-4">
+            <div class="text-uppercase small fw-bold text-muted mb-1">En Descanso / No disp.</div>
+            <div class="fs-3 fw-bold text-secondary">{{ total_no_disponibles }}</div>
+            <div class="small text-muted"><i class="bi bi-pause-circle me-1"></i> No disponibles temporalmente</div>
+        </div>
+    </div>
+</div>
+
+<!-- Listado de Técnicos -->
+<div class="card card-custom p-4 bg-white shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-person-badge text-primary me-2"></i>Especialistas Registrados
+        </h5>
+        <span class="badge bg-light text-secondary border small">Actualización dinámica</span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr class="small text-uppercase text-secondary">
+                    <th>Técnico</th>
+                    <th>Especialidad</th>
+                    <th>Contacto</th>
+                    <th>Edificio Asignado</th>
+                    <th>Incidencias Activas</th>
+                    <th>Estado de Disponibilidad</th>
+                    {% if es_admin %}
+                    <th class="text-end">Modificar Estado</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for tec in tecnicos %}
+                    <tr>
+                        <td>
+                            <div class="fw-bold text-dark">{{ tec.nombre }}</div>
+                            {% if not tec.activo %}
+                                <span class="badge bg-danger small">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-primary border">
+                                <i class="bi bi-wrench-adjustable me-1"></i>{{ tec.get_especialidad_display }}
+                            </span>
+                        </td>
+                        <td class="small">
+                            <div><i class="bi bi-telephone text-muted me-1"></i>{{ tec.telefono|default:"Sin teléfono" }}</div>
+                            <div class="text-muted"><i class="bi bi-envelope text-muted me-1"></i>{{ tec.email|default:"Sin correo" }}</div>
+                        </td>
+                        <td class="small text-secondary">
+                            {{ tec.edificio.nombre|default:"Todos los edificios" }}
+                        </td>
+                        <td>
+                            <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-2 py-1">
+                                <i class="bi bi-ticket-detailed me-1"></i>{{ tec.incidencias_activas_count }} activas
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ tec.disponibilidad }} px-3 py-1 rounded-pill">
+                                {% if tec.disponibilidad == 'disponible' %}
+                                    <span class="live-dot"></span>
+                                {% endif %}
+                                {{ tec.get_disponibilidad_display }}
+                            </span>
+                        </td>
+                        {% if es_admin %}
+                        <td class="text-end">
+                            <form method="post" action="{% url 'tecnico_cambiar_disponibilidad' tec.pk %}" class="d-inline-flex gap-1 justify-content-end">
+                                {% csrf_token %}
+                                <select name="disponibilidad" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+                                    <option value="disponible" {% if tec.disponibilidad == 'disponible' %}selected{% endif %}>🟢 Disponible</option>
+                                    <option value="ocupado" {% if tec.disponibilidad == 'ocupado' %}selected{% endif %}>🟡 Ocupado</option>
+                                    <option value="descanso" {% if tec.disponibilidad == 'descanso' %}selected{% endif %}>🔵 En Descanso</option>
+                                    <option value="no_disponible" {% if tec.disponibilidad == 'no_disponible' %}selected{% endif %}>🔴 No Disponible</option>
+                                </select>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="bi bi-person-x fs-2 d-block mb-1 opacity-50"></i>
+                            No hay técnicos registrados aún. ¡Registra el primero para asignaciones de arreglos!
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

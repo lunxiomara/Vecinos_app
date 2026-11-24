@@ -1,23 +1,26 @@
 {% extends 'incidencias/base.html' %}
 
-{% block title %}Detalle de Incidencia #{{ incidencia.id }} - VecinosApp{% endblock %}
+{% block title %}Detalle de Incidencia #{{ incidencia.id_incid }} - VecinosApp{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-lg-8">
-        <div class="card card-custom p-4 bg-white mb-4">
+        <div class="card card-custom p-4 bg-white mb-4 shadow-sm border">
             <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-                <div>
-                    <span class="badge badge-{{ incidencia.estado }} rounded-pill px-3 py-1 text-uppercase me-2">
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                    <span id="liveEstadoBadge" class="badge badge-{{ incidencia.estado }} rounded-pill px-3 py-2 text-uppercase">
                         {{ incidencia.get_estado_display }}
                     </span>
-                    <span class="badge badge-{{ incidencia.prioridad }} rounded-pill px-3 py-1 text-uppercase">
+                    <span class="badge badge-{{ incidencia.prioridad }} rounded-pill px-3 py-2 text-uppercase">
                         Prioridad {{ incidencia.get_prioridad_display }}
+                    </span>
+                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-3 py-2" title="Actualización continua en tiempo real (<2s)">
+                        <span class="live-dot"></span> <span id="liveConnectionText">En vivo</span>
                     </span>
                 </div>
                 <div class="btn-group btn-group-sm">
                     {% if es_admin %}
-                        <a href="{% url 'incidencia_update' incidencia.pk %}" class="btn btn-warning text-dark">
+                        <a href="{% url 'incidencia_update' incidencia.pk %}" class="btn btn-warning text-dark fw-semibold">
                             <i class="bi bi-gear-fill me-1"></i> Gestionar Incidencia
                         </a>
                     {% elif incidencia.puede_editar_residente %}
@@ -33,7 +36,7 @@
                 </div>
             </div>
 
-            <h3 class="fw-bold mb-3">{{ incidencia.titulo }}</h3>
+            <h3 class="fw-bold mb-3 text-dark">{{ incidencia.titulo }}</h3>
 
             <div class="mb-4">
                 <h6 class="fw-bold text-secondary text-uppercase small">Descripción del Problema</h6>
@@ -59,11 +62,11 @@
         </div>
 
         <!-- Sección de Comentarios y Seguimiento -->
-        <div class="card card-custom p-4 bg-white">
-            <h5 class="fw-bold mb-3"><i class="bi bi-chat-left-dots text-primary me-2"></i>Historial de Mensajes y Seguimiento</h5>
+        <div class="card card-custom p-4 bg-white shadow-sm border">
+            <h5 class="fw-bold mb-3 text-dark"><i class="bi bi-chat-left-dots text-primary me-2"></i>Historial de Mensajes y Seguimiento</h5>
 
             <!-- Lista de comentarios -->
-            <div class="mb-4">
+            <div class="mb-4" id="comentariosContainer">
                 {% if comentarios %}
                     {% for c in comentarios %}
                         <div class="timeline-comment bg-light p-3 rounded mb-3">
@@ -93,7 +96,7 @@
                     {{ comentario_form.mensaje }}
                 </div>
                 <div class="text-end">
-                    <button type="submit" class="btn btn-primary btn-sm px-3">
+                    <button type="submit" class="btn btn-primary btn-sm px-3 fw-semibold">
                         <i class="bi bi-send-fill me-1"></i> Enviar Mensaje
                     </button>
                 </div>
@@ -101,14 +104,14 @@
         </div>
     </div>
 
-    <!-- Columna Derecha: Metadatos y Residentes -->
+    <!-- Columna Derecha: Metadatos y Datos del Residente / Técnico -->
     <div class="col-lg-4">
-        <div class="card card-custom p-3 bg-white mb-3">
+        <div class="card card-custom p-3 bg-white mb-3 shadow-sm border">
             <h6 class="fw-bold text-uppercase text-secondary small mb-3 border-bottom pb-2">Información de la Incidencia</h6>
             
             <div class="mb-3">
                 <span class="text-muted small d-block">Número de Ticket:</span>
-                <span class="fw-bold">#{{ incidencia.id }}</span>
+                <span class="fw-bold text-primary">#{{ incidencia.id_incid }}</span>
             </div>
 
             <div class="mb-3">
@@ -117,12 +120,21 @@
             </div>
 
             <div class="mb-3">
-                <span class="text-muted small d-block">Técnico Asignado:</span>
-                {% if incidencia.tecnico_asignado %}
-                    <span class="badge bg-primary text-white p-2 fs-6"><i class="bi bi-wrench me-1"></i>{{ incidencia.tecnico_asignado }}</span>
-                {% else %}
-                    <span class="text-muted fst-italic">Sin técnico asignado aún</span>
-                {% endif %}
+                <span class="text-muted small d-block">Técnico Asignado para Arreglo:</span>
+                <div id="liveTecnicoContainer" class="mt-1">
+                    {% if incidencia.tecnico %}
+                        <span id="liveTecnicoBadge" class="badge badge-{{ incidencia.tecnico.disponibilidad }} p-2 fs-6">
+                            <i class="bi bi-wrench me-1"></i>{{ incidencia.tecnico.nombre }}
+                            <span class="badge bg-white text-dark ms-1">({{ incidencia.tecnico.get_disponibilidad_display }})</span>
+                        </span>
+                    {% elif incidencia.tecnico_asignado %}
+                        <span id="liveTecnicoBadge" class="badge bg-primary text-white p-2 fs-6">
+                            <i class="bi bi-wrench me-1"></i>{{ incidencia.tecnico_asignado }}
+                        </span>
+                    {% else %}
+                        <span id="liveTecnicoBadge" class="text-muted fst-italic">Sin técnico asignado aún</span>
+                    {% endif %}
+                </div>
             </div>
 
             <div class="mb-3">
@@ -132,17 +144,17 @@
 
             <div>
                 <span class="text-muted small d-block">Última Actualización:</span>
-                <span>{{ incidencia.fecha_actualizacion|date:"d/m/Y H:i" }}</span>
+                <span id="liveFechaAct">{{ incidencia.fecha_actualizacion|date:"d/m/Y H:i" }}</span>
             </div>
         </div>
 
-        <div class="card card-custom p-3 bg-white">
+        <div class="card card-custom p-3 bg-white shadow-sm border">
             <h6 class="fw-bold text-uppercase text-secondary small mb-3 border-bottom pb-2">Datos del Residente</h6>
             
             <div class="d-flex align-items-center mb-3">
                 <i class="bi bi-person-badge text-primary fs-3 me-2"></i>
                 <div>
-                    <div class="fw-bold">{{ incidencia.creador.get_full_name|default:incidencia.creador.username }}</div>
+                    <div class="fw-bold text-dark">{{ incidencia.creador.get_full_name|default:incidencia.creador.username }}</div>
                     <div class="text-muted small">{{ incidencia.creador.email }}</div>
                 </div>
             </div>
@@ -155,11 +167,11 @@
                 <div class="row">
                     <div class="col-6 mb-2">
                         <span class="text-muted small d-block">Piso:</span>
-                        <span class="fw-semibold">{{ incidencia.creador.perfil.piso }}</span>
+                        <span class="fw-semibold">{{ incidencia.creador.perfil.piso|default:"N/A" }}</span>
                     </div>
                     <div class="col-6 mb-2">
                         <span class="text-muted small d-block">Puerta / Depto:</span>
-                        <span class="fw-semibold">{{ incidencia.creador.perfil.puerta }}</span>
+                        <span class="fw-semibold">{{ incidencia.creador.perfil.puerta|default:"N/A" }}</span>
                     </div>
                 </div>
                 <div>
@@ -172,4 +184,70 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // ── M6: Tiempo Real (El residente ve el cambio de estado en < 2 segundos sin recargar) ──
+    (function () {
+        const liveUrl = "{% url 'incidencia_estado_live' incidencia.pk %}";
+        let estadoActual = "{{ incidencia.estado }}";
+        let tecnicoActual = "{{ incidencia.tecnico_asignado|default:'' }}";
+
+        function checkLiveUpdate() {
+            fetch(liveUrl, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(response => {
+                if (!response.ok) return null;
+                return response.json();
+            })
+            .then(data => {
+                if (!data) return;
+
+                // 1. Detección de cambio de estado
+                if (data.estado && data.estado !== estadoActual) {
+                    const badge = document.getElementById('liveEstadoBadge');
+                    if (badge) {
+                        badge.className = `badge badge-${data.estado} rounded-pill px-3 py-2 text-uppercase`;
+                        badge.textContent = data.estado_display;
+                        badge.style.transition = 'all 0.3s ease';
+                        badge.style.transform = 'scale(1.15)';
+                        setTimeout(() => badge.style.transform = 'scale(1)', 400);
+                    }
+                    if (window.mostrarNotificacionEnVivo) {
+                        window.mostrarNotificacionEnVivo(`¡Estado actualizado en vivo a "${data.estado_display}"!`, 'bg-success');
+                    }
+                    estadoActual = data.estado;
+                }
+
+                // 2. Detección de cambio de técnico asignado
+                if (data.tecnico_asignado && data.tecnico_asignado !== tecnicoActual && data.tecnico_asignado !== 'Sin técnico asignado') {
+                    const tecBadge = document.getElementById('liveTecnicoBadge');
+                    if (tecBadge) {
+                        let dispHtml = data.tecnico_disponibilidad ? ` <span class="badge bg-white text-dark ms-1">(${data.tecnico_disponibilidad})</span>` : '';
+                        tecBadge.className = 'badge bg-primary text-white p-2 fs-6';
+                        tecBadge.innerHTML = `<i class="bi bi-wrench me-1"></i>${data.tecnico_asignado}${dispHtml}`;
+                    }
+                    if (window.mostrarNotificacionEnVivo) {
+                        window.mostrarNotificacionEnVivo(`Técnico asignado: ${data.tecnico_asignado}`, 'bg-primary');
+                    }
+                    tecnicoActual = data.tecnico_asignado;
+                }
+
+                // 3. Actualizar timestamp
+                if (data.fecha_actualizacion) {
+                    const fechaEl = document.getElementById('liveFechaAct');
+                    if (fechaEl) fechaEl.textContent = data.fecha_actualizacion;
+                }
+            })
+            .catch(err => {
+                console.debug("Live sync polling error:", err);
+            });
+        }
+
+        // Consultar cada 1.5s (cumple el criterio de aceptación M6: < 2 segundos)
+        setInterval(checkLiveUpdate, 1500);
+    })();
+</script>
 {% endblock %}

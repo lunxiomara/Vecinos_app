@@ -8,7 +8,7 @@ de concurrencia pesimista (select_for_update) y optimista (campo version).
 
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from .models import Incidencia, EventoIncidencia, OutboxMessage
+from .models import Incidencia, EventoIncidencia, OutboxMessage, Tecnico
 
 
 class ConcurrencyError(Exception):
@@ -21,9 +21,9 @@ class TransicionInvalidaError(ValidationError):
     pass
 
 
-def asignar_tecnico(incidencia_id: int, nombre_tecnico: str, actor, version_esperada: int = None) -> Incidencia:
+def asignar_tecnico(incidencia_id: int, nombre_tecnico: str = '', actor=None, version_esperada: int = None, tecnico_id: int = None) -> Incidencia:
     """
-    Caso de uso: Asignación concurrente segura de técnico.
+    Caso de uso: Asignación concurrente segura de técnico según disponibilidad (M1, M3, M6).
     
     Aplica BLOQUEO PESIMISTA con select_for_update():
     Garantiza que una incidencia NUNCA quede con dos técnicos ni sufra
@@ -41,17 +41,31 @@ def asignar_tecnico(incidencia_id: int, nombre_tecnico: str, actor, version_espe
             )
 
         tecnico_anterior = incidencia.tecnico_asignado
+        tecnico_obj = None
+
+        if tecnico_id:
+            try:
+                tecnico_obj = Tecnico.objects.select_for_update().get(pk=tecnico_id)
+                nombre_tecnico = tecnico_obj.nombre
+            except Tecnico.DoesNotExist:
+                pass
+        elif nombre_tecnico:
+            tecnico_obj = Tecnico.objects.filter(nombre=nombre_tecnico).first()
+
+        incidencia.tecnico = tecnico_obj
         incidencia.tecnico_asignado = nombre_tecnico
         incidencia.version += 1
-        incidencia._actor_username = getattr(actor, 'username', 'sistema')
-        incidencia.save(update_fields=['tecnico_asignado', 'version', 'fecha_actualizacion'])
+        incidencia._actor_username = getattr(actor, 'username', 'sistema') if actor else 'sistema'
+        incidencia.save(update_fields=['tecnico', 'tecnico_asignado', 'version', 'fecha_actualizacion'])
+
+        disp_info = f" (Disponibilidad: {tecnico_obj.get_disponibilidad_display()})" if tecnico_obj else ""
 
         # Registro inmutable de auditoría
         EventoIncidencia.objects.create(
             incidencia=incidencia,
             tipo='asignacion',
-            actor=actor,
-            detalle=f"Técnico asignado por {getattr(actor, 'username', 'sistema')}: '{nombre_tecnico}' (antes: '{tecnico_anterior or 'Sin asignar'}')"
+            actor=actor if actor and getattr(actor, 'is_authenticated', False) else None,
+            detalle=f"Técnico asignado por {getattr(actor, 'username', 'sistema') if actor else 'sistema'}: '{nombre_tecnico}'{disp_info} (antes: '{tecnico_anterior or 'Sin asignar'}')"
         )
 
         return incidencia

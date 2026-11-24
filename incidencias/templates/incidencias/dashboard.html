@@ -1,72 +1,212 @@
 {% extends 'incidencias/base.html' %}
 
-{% block title %}Dashboard Estadístico - VecinosApp{% endblock %}
+{% block title %}Panel de Indicadores Operativos M6 - VecinosApp{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<!-- Cabecera del Panel -->
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
     <div>
-        <h2 class="fw-bold mb-1"><i class="bi bi-speedometer2 text-primary me-2"></i>Dashboard Administrativo</h2>
-        <p class="text-muted mb-0">Métricas consolidadas de incidencias y estado operativo de los edificios.</p>
+        <div class="d-flex align-items-center gap-2">
+            <h2 class="fw-bold mb-0 text-dark">
+                <i class="bi bi-speedometer2 text-primary me-2"></i>Panel de Indicadores Operativos
+            </h2>
+            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1">
+                <span class="live-dot"></span> M6 Tiempo Real
+            </span>
+        </div>
+        <p class="text-muted small mt-1 mb-0">Monitoreo continuo de MTTR, cumplimiento de SLA, casos abiertos y tasa de reaperturas.</p>
     </div>
-    <div>
-        <a href="{% url 'incidencia_list' %}" class="btn btn-outline-primary btn-sm">
-            <i class="bi bi-list-task me-1"></i> Ver Listado
+    <div class="d-flex gap-2">
+        <a href="{% url 'tecnicos_list' %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-tools me-1"></i> Técnicos y Disponibilidad
+        </a>
+        <a href="{% url 'incidencia_list' %}" class="btn btn-primary btn-sm shadow-sm">
+            <i class="bi bi-list-task me-1"></i> Listado de Incidencias
         </a>
     </div>
 </div>
 
-<!-- Tarjetas KPI -->
+<!-- Barra de Filtros M6 (Edificio, Técnico, Rango de Fechas) -->
+<div class="card card-custom p-3 bg-white mb-4 shadow-sm border">
+    <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold text-secondary mb-1">
+                <i class="bi bi-building me-1 text-primary"></i> Edificio
+            </label>
+            <select name="edificio" class="form-select form-select-sm">
+                <option value="">-- Todos los Edificios --</option>
+                {% for edif in edificios_lista %}
+                    <option value="{{ edif.pk }}" {% if filtro_edificio == edif.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ edif.nombre }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold text-secondary mb-1">
+                <i class="bi bi-wrench me-1 text-primary"></i> Técnico Responsable
+            </label>
+            <select name="tecnico" class="form-select form-select-sm">
+                <option value="">-- Todos los Técnicos --</option>
+                {% for tec in tecnicos_filtro_lista %}
+                    <option value="{{ tec.nombre }}" {% if filtro_tecnico == tec.nombre %}selected{% endif %}>
+                        {{ tec.nombre }} ({{ tec.get_disponibilidad_display }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold text-secondary mb-1">
+                <i class="bi bi-calendar-event me-1"></i> Desde
+            </label>
+            <input type="date" name="fecha_desde" class="form-control form-control-sm" value="{{ filtro_fecha_desde }}">
+        </div>
+
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold text-secondary mb-1">
+                <i class="bi bi-calendar-event me-1"></i> Hasta
+            </label>
+            <input type="date" name="fecha_hasta" class="form-control form-control-sm" value="{{ filtro_fecha_hasta }}">
+        </div>
+
+        <div class="col-md-2 d-flex gap-1">
+            <button type="submit" class="btn btn-primary btn-sm w-100 fw-semibold">
+                <i class="bi bi-funnel-fill me-1"></i> Filtrar
+            </button>
+            {% if filtro_edificio or filtro_tecnico or filtro_fecha_desde or filtro_fecha_hasta %}
+                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm" title="Limpiar filtros">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- Los 4 Indicadores Operativos Clave (M6) -->
 <div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="card card-custom p-3 bg-white border-start border-primary border-4 shadow-sm">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="text-muted small text-uppercase fw-bold">Total Incidencias</div>
-                    <div class="fs-3 fw-bold text-dark">{{ total_general }}</div>
-                </div>
-                <i class="bi bi-ticket-detailed text-primary fs-1 opacity-50"></i>
+    <!-- Indicador 1: Tiempo Medio de Resolución (MTTR) -->
+    <div class="col-md-3">
+        <div class="kpi-card h-100 border-start border-primary border-4">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="text-uppercase small fw-bold text-muted">Tiempo Medio (MTTR)</span>
+                <span class="badge bg-primary bg-opacity-10 text-primary p-2 rounded-circle">
+                    <i class="bi bi-hourglass-split fs-5"></i>
+                </span>
+            </div>
+            <div class="fs-2 fw-bold text-dark mb-1">{{ mttr_horas }} <span class="fs-6 text-muted fw-normal">horas</span></div>
+            <div class="small text-muted">
+                <i class="bi bi-check2-circle text-success me-1"></i> Basado en {{ total_resueltas }} casos resueltos
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card card-custom p-3 bg-white border-start border-success border-4 shadow-sm">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="text-muted small text-uppercase fw-bold">Edificios Administrados</div>
-                    <div class="fs-3 fw-bold text-dark">{{ total_edificios }}</div>
-                </div>
-                <i class="bi bi-buildings text-success fs-1 opacity-50"></i>
+
+    <!-- Indicador 2: Cumplimiento de SLA -->
+    <div class="col-md-3">
+        <div class="kpi-card h-100 border-start border-success border-4">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="text-uppercase small fw-bold text-muted">Cumplimiento SLA</span>
+                <span class="badge bg-success bg-opacity-10 text-success p-2 rounded-circle">
+                    <i class="bi bi-shield-check fs-5"></i>
+                </span>
+            </div>
+            <div class="fs-2 fw-bold text-dark mb-1">{{ cumplimiento_sla }}%</div>
+            <div class="small text-muted">
+                <span class="badge bg-success text-white me-1">{{ dentro_sla }} dentro</span>
+                <span class="badge bg-danger text-white">{{ fuera_sla }} fuera</span>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card card-custom p-3 bg-white border-start border-info border-4 shadow-sm">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="text-muted small text-uppercase fw-bold">Residentes Registrados</div>
-                    <div class="fs-3 fw-bold text-dark">{{ total_residentes }}</div>
-                </div>
-                <i class="bi bi-people text-info fs-1 opacity-50"></i>
+
+    <!-- Indicador 3: Casos Abiertos Acumulados -->
+    <div class="col-md-3">
+        <div class="kpi-card h-100 border-start border-warning border-4">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="text-uppercase small fw-bold text-muted">Casos Abiertos</span>
+                <span class="badge bg-warning bg-opacity-10 text-warning p-2 rounded-circle">
+                    <i class="bi bi-exclamation-triangle-fill fs-5 text-warning"></i>
+                </span>
+            </div>
+            <div class="fs-2 fw-bold text-dark mb-1">{{ casos_abiertos_acumulados }}</div>
+            <div class="small text-muted">
+                <i class="bi bi-clock-history me-1"></i> Pendientes o en proceso actual
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicador 4: Tasa de Reapertura -->
+    <div class="col-md-3">
+        <div class="kpi-card h-100 border-start border-info border-4">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="text-uppercase small fw-bold text-muted">Tasa de Reapertura</span>
+                <span class="badge bg-info bg-opacity-10 text-info p-2 rounded-circle">
+                    <i class="bi bi-arrow-repeat fs-5"></i>
+                </span>
+            </div>
+            <div class="fs-2 fw-bold text-dark mb-1">{{ tasa_reapertura }}%</div>
+            <div class="small text-muted">
+                <i class="bi bi-journal-check me-1"></i> {{ incidencias_reabiertas }} incidencias con reapertura
             </div>
         </div>
     </div>
 </div>
 
-<!-- Gráficos con Chart.js -->
+<!-- Gráficos Interactivos (Chart.js) -->
 <div class="row g-4 mb-4">
+    <!-- Gráfico 1: Estado de Incidencias -->
     <div class="col-lg-6">
-        <div class="card card-custom p-4 bg-white h-100 shadow-sm">
-            <h5 class="fw-bold mb-3"><i class="bi bi-pie-chart text-primary me-2"></i>Incidencias por Categoría</h5>
-            <div style="position: relative; height: 300px;">
+        <div class="card card-custom p-4 bg-white h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-pie-chart-fill text-primary me-2"></i>Distribución por Estado
+                </h6>
+                <span class="badge bg-light text-secondary border small">Total: {{ total_general }}</span>
+            </div>
+            <div style="position: relative; height: 280px;">
+                <canvas id="estadoChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico 2: Cumplimiento de SLA -->
+    <div class="col-lg-6">
+        <div class="card card-custom p-4 bg-white h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-shield-shaded text-success me-2"></i>Cumplimiento de SLA (Objetivo)
+                </h6>
+                <span class="badge bg-light text-secondary border small">{{ total_resueltas }} resueltas</span>
+            </div>
+            <div style="position: relative; height: 280px;">
+                <canvas id="slaChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico 3: Incidencias por Categoría -->
+    <div class="col-lg-6">
+        <div class="card card-custom p-4 bg-white h-100">
+            <h6 class="fw-bold mb-3 text-dark">
+                <i class="bi bi-bar-chart-line-fill text-info me-2"></i>Incidencias por Categoría
+            </h6>
+            <div style="position: relative; height: 260px;">
                 <canvas id="categoriaChart"></canvas>
             </div>
         </div>
     </div>
+
+    <!-- Gráfico 4: Carga de Incidencias por Técnico -->
     <div class="col-lg-6">
-        <div class="card card-custom p-4 bg-white h-100 shadow-sm">
-            <h5 class="fw-bold mb-3"><i class="bi bi-bar-chart-line text-primary me-2"></i>Incidencias por Estado</h5>
-            <div style="position: relative; height: 300px;">
-                <canvas id="estadoChart"></canvas>
+        <div class="card card-custom p-4 bg-white h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-person-lines-fill text-warning me-2"></i>Carga de Trabajo por Técnico
+                </h6>
+                <a href="{% url 'tecnicos_list' %}" class="small text-decoration-none">Ver todos &rarr;</a>
+            </div>
+            <div style="position: relative; height: 260px;">
+                <canvas id="tecnicoChart"></canvas>
             </div>
         </div>
     </div>
@@ -74,38 +214,67 @@
 
 <!-- Últimos Reportes Recibidos -->
 <div class="card card-custom p-4 bg-white shadow-sm">
-    <h5 class="fw-bold mb-3"><i class="bi bi-clock-history text-primary me-2"></i>Últimos Reportes Registrados</h5>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-clock-history text-primary me-2"></i>Últimos Reportes Registrados
+        </h6>
+        <span class="text-muted small">Actualizado en vivo</span>
+    </div>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
-                <tr>
-                    <th>#</th>
+                <tr class="small text-uppercase text-secondary">
+                    <th># Ticket</th>
                     <th>Título</th>
-                    <th>Residente</th>
-                    <th>Categoría</th>
+                    <th>Edificio</th>
+                    <th>Técnico Asignado</th>
+                    <th>Prioridad</th>
                     <th>Estado</th>
                     <th>Fecha</th>
-                    <th>Acción</th>
+                    <th class="text-end">Acción</th>
                 </tr>
             </thead>
             <tbody>
                 {% for inc in ultimas_incidencias %}
                     <tr>
-                        <td class="fw-bold">#{{ inc.id }}</td>
-                        <td>{{ inc.titulo }}</td>
-                        <td>{{ inc.creador.first_name|default:inc.creador.username }}</td>
-                        <td><span class="badge bg-light text-dark border">{{ inc.get_categoria_display }}</span></td>
-                        <td><span class="badge badge-{{ inc.estado }}">{{ inc.get_estado_display }}</span></td>
-                        <td class="small text-muted">{{ inc.fecha_creacion|date:"d/m/Y H:i" }}</td>
+                        <td class="fw-bold text-primary">#{{ inc.id_incid }}</td>
                         <td>
-                            <a href="{% url 'incidencia_detail' inc.id %}" class="btn btn-sm btn-outline-primary">
-                                Ver
+                            <div class="fw-semibold">{{ inc.titulo }}</div>
+                            <div class="small text-muted">{{ inc.creador.first_name|default:inc.creador.username }}</div>
+                        </td>
+                        <td class="small">{{ inc.edificio.nombre|default:"N/A" }}</td>
+                        <td>
+                            {% if inc.tecnico_asignado %}
+                                <span class="badge bg-light text-dark border">
+                                    <i class="bi bi-wrench me-1 text-primary"></i>{{ inc.tecnico_asignado }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted small fst-italic">Sin asignar</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ inc.prioridad }}">
+                                {{ inc.get_prioridad_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ inc.estado }}">
+                                {{ inc.get_estado_display }}
+                            </span>
+                        </td>
+                        <td class="small text-muted">{{ inc.fecha_creacion|date:"d/m/Y H:i" }}</td>
+                        <td class="text-end">
+                            <a href="{% url 'incidencia_detail' inc.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> Detalle
                             </a>
                         </td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center text-muted py-3">No hay incidencias recientes.</td>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox fs-2 d-block mb-1 opacity-50"></i>
+                            No hay incidencias que coincidan con los filtros seleccionados.
+                        </td>
                     </tr>
                 {% endfor %}
             </tbody>
@@ -115,28 +284,33 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- Cargar Chart.js en la parte inferior para garantizar disponibilidad -->
+<!-- Chart.js 4.4 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function () {
-        // Parsear datos JSON seguros desde Django
         const catLabels = JSON.parse('{{ cat_labels_json|escapejs }}');
         const catCounts = JSON.parse('{{ cat_counts_json|escapejs }}');
 
         const estLabels = JSON.parse('{{ est_labels_json|escapejs }}');
         const estCounts = JSON.parse('{{ est_counts_json|escapejs }}');
 
-        // 1. Gráfico de Categorías (Doughnut)
-        const catCanvas = document.getElementById('categoriaChart');
-        if (catCanvas) {
-            new Chart(catCanvas, {
+        const slaLabels = JSON.parse('{{ sla_labels_json|escapejs }}');
+        const slaCounts = JSON.parse('{{ sla_counts_json|escapejs }}');
+
+        const tecLabels = JSON.parse('{{ tec_labels_json|escapejs }}');
+        const tecCounts = JSON.parse('{{ tec_counts_json|escapejs }}');
+
+        // 1. Gráfico de Estados (Doughnut)
+        const estCanvas = document.getElementById('estadoChart');
+        if (estCanvas) {
+            new Chart(estCanvas, {
                 type: 'doughnut',
                 data: {
-                    labels: catLabels.length ? catLabels : ['Sin datos'],
+                    labels: estLabels.length ? estLabels : ['Sin datos'],
                     datasets: [{
-                        data: catCounts.length ? catCounts : [0],
-                        backgroundColor: ['#0d6efd', '#20c997', '#ffc107', '#dc3545', '#6f42c1', '#fd7e14'],
-                        borderWidth: 1
+                        data: estCounts.length ? estCounts : [1],
+                        backgroundColor: ['#f59e0b', '#0284c7', '#10b981', '#64748b'],
+                        borderWidth: 2
                     }]
                 },
                 options: {
@@ -149,17 +323,40 @@
             });
         }
 
-        // 2. Gráfico de Estados (Bar)
-        const estCanvas = document.getElementById('estadoChart');
-        if (estCanvas) {
-            new Chart(estCanvas, {
+        // 2. Gráfico de Cumplimiento de SLA (Pie)
+        const slaCanvas = document.getElementById('slaChart');
+        if (slaCanvas) {
+            new Chart(slaCanvas, {
+                type: 'pie',
+                data: {
+                    labels: slaLabels,
+                    datasets: [{
+                        data: (slaCounts[0] || slaCounts[1]) ? slaCounts : [1, 0],
+                        backgroundColor: ['#10b981', '#ef4444'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        // 3. Gráfico de Categorías (Bar)
+        const catCanvas = document.getElementById('categoriaChart');
+        if (catCanvas) {
+            new Chart(catCanvas, {
                 type: 'bar',
                 data: {
-                    labels: estLabels.length ? estLabels : ['Sin datos'],
+                    labels: catLabels.length ? catLabels : ['Sin datos'],
                     datasets: [{
-                        label: 'Cantidad de Incidencias',
-                        data: estCounts.length ? estCounts : [0],
-                        backgroundColor: ['#ffc107', '#0dcaf0', '#198754', '#6c757d'],
+                        label: 'Incidencias',
+                        data: catCounts.length ? catCounts : [0],
+                        backgroundColor: '#3b82f6',
                         borderRadius: 6
                     }]
                 },
@@ -167,17 +364,35 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: { 
-                            beginAtZero: true, 
-                            ticks: { 
-                                precision: 0,
-                                stepSize: 1
-                            } 
-                        }
+                        y: { beginAtZero: true, ticks: { precision: 0 } }
                     },
-                    plugins: {
-                        legend: { display: false }
-                    }
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // 4. Gráfico Carga por Técnico (Horizontal Bar)
+        const tecCanvas = document.getElementById('tecnicoChart');
+        if (tecCanvas) {
+            new Chart(tecCanvas, {
+                type: 'bar',
+                data: {
+                    labels: tecLabels.length ? tecLabels : ['Sin técnicos asignados'],
+                    datasets: [{
+                        label: 'Incidencias Asignadas',
+                        data: tecCounts.length ? tecCounts : [0],
+                        backgroundColor: '#8b5cf6',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { beginAtZero: true, ticks: { precision: 0 } }
+                    },
+                    plugins: { legend: { display: false } }
                 }
             });
         }

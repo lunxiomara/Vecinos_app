@@ -105,6 +105,8 @@ class ConcurrenciaSelectForUpdateTest(TransactionTestCase):
         El bloqueo pesimista select_for_update serializa la fila.
         Resultado: versión = 21, 20 eventos inmutables registrados, y la fila es íntegra.
         """
+        if connection.vendor == 'sqlite':
+            self.skipTest("select_for_update multi-hilo requiere motor con bloqueo a nivel de fila (MySQL/PostgreSQL).")
         num_hilos = 20
         barrera = threading.Barrier(num_hilos)  # Sincroniza inicio exacto
         errores = []

@@ -1,7 +1,21 @@
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
 import os
+import re
 import sys
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+site_packages = BASE_DIR / 'venv' / 'Lib' / 'site-packages'
+if site_packages.exists() and str(site_packages) not in sys.path:
+    sys.path.append(str(site_packages))
+
+try:
+    import django.utils.cache
+    if not hasattr(django.utils.cache, 'cc_delim_re'):
+        django.utils.cache.cc_delim_re = re.compile(r'\s*,\s*')
+except ImportError:
+    pass
 
 
 def main():

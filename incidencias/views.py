@@ -1,5 +1,6 @@
 import json
 import time
+from datetime import datetime, timedelta
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView
@@ -7,13 +8,13 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.auth.models import Group
 from django.contrib import messages
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.core.exceptions import PermissionDenied
-from django.http import Http404
-from django.http import HttpResponseNotFound
+from django.http import Http404, HttpResponseNotFound, JsonResponse
+from django.utils.dateparse import parse_date
 
-from .models import Incidencia, Comentario, Perfil, Edificio, EventoIncidencia
-from .forms import RegistroForm, IncidenciaResidenteForm, IncidenciaAdminForm, ComentarioForm
+from .models import Incidencia, Comentario, Perfil, Edificio, EventoIncidencia, Tecnico
+from .forms import RegistroForm, IncidenciaResidenteForm, IncidenciaAdminForm, ComentarioForm, TecnicoForm
 from .filters import IncidenciaFilter
 from .observabilidad import obtener_estado_observabilidad, reiniciar_observabilidad 
 
@@ -246,6 +247,14 @@ class IncidenciaUpdateView(LoginRequiredMixin, UpdateView):
         tecnico_anterior = incidencia_previa.tecnico_asignado
         form.instance._actor_username = self.request.user.username
 
+        # Sincronizar técnico y técnico asignado
+        tecnico_obj = form.cleaned_data.get('tecnico')
+        tecnico_asignado = form.cleaned_data.get('tecnico_asignado')
+        if tecnico_obj and not tecnico_asignado:
+            form.instance.tecnico_asignado = tecnico_obj.nombre
+        elif tecnico_asignado and not tecnico_obj:
+            form.instance.tecnico = Tecnico.objects.filter(nombre=tecnico_asignado).first()
+
         response = super().form_valid(form)
 
         # Auditoría de cambio de estado
@@ -262,11 +271,12 @@ class IncidenciaUpdateView(LoginRequiredMixin, UpdateView):
 
         # Auditoría de asignación de técnico
         if self.object.tecnico_asignado != tecnico_anterior:
+            disp_info = f" (Disponibilidad: {self.object.tecnico.get_disponibilidad_display()})" if self.object.tecnico else ""
             EventoIncidencia.objects.create(
                 incidencia=self.object,
                 tipo='asignacion',
                 actor=self.request.user,
-                detalle=f"Técnico asignado: {self.object.tecnico_asignado}"
+                detalle=f"Técnico asignado: '{self.object.tecnico_asignado}'{disp_info}"
             )
 
         messages.success(self.request, "Incidencia actualizada con éxito.")
@@ -315,54 +325,263 @@ class DashboardAdminView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        edificio = obtener_edificio_usuario(self.request)
+        edificio_usuario = obtener_edificio_usuario(self.request)
+        user = self.request.user
 
-        # Aislamiento en el panel: admin solo ve su propio edificio (salvo superuser)
-        if self.request.user.is_superuser:
-            base_qs = Incidencia.objects.all()
-            total_edificios = Edificio.objects.count()
-            total_residentes = Perfil.objects.count()
-        elif edificio:
-            base_qs = Incidencia.objects.del_edificio(edificio)
-            total_edificios = 1
-            total_residentes = Perfil.objects.filter(edificio=edificio).count()
+        # Base inicial según rol y edificio activo
+        if user.is_superuser:
+            qs = Incidencia.objects.all()
+            edificios_lista = list(Edificio.objects.all())
+        elif edificio_usuario:
+            qs = Incidencia.objects.del_edificio(edificio_usuario)
+            edificios_lista = [edificio_usuario]
         else:
-            base_qs = Incidencia.objects.none()
-            total_edificios = 0
-            total_residentes = 0
+            qs = Incidencia.objects.none()
+            edificios_lista = []
 
-        # Estadísticas por Categoría
+        # ── FILTROS M6: Edificio, Técnico, Rango de Fechas ──
+        filtro_edificio = self.request.GET.get('edificio', '').strip()
+        filtro_tecnico = self.request.GET.get('tecnico', '').strip()
+        fecha_desde_str = self.request.GET.get('fecha_desde', '').strip()
+        fecha_hasta_str = self.request.GET.get('fecha_hasta', '').strip()
+
+        if filtro_edificio and (user.is_superuser or (edificio_usuario and str(edificio_usuario.pk) == filtro_edificio)):
+            qs = qs.filter(edificio_id=filtro_edificio)
+
+        if filtro_tecnico:
+            if filtro_tecnico.isdigit():
+                qs = qs.filter(Q(tecnico_id=int(filtro_tecnico)) | Q(tecnico_asignado__iexact=filtro_tecnico))
+            else:
+                qs = qs.filter(Q(tecnico_asignado__icontains=filtro_tecnico) | Q(tecnico__nombre__icontains=filtro_tecnico))
+
+        if fecha_desde_str:
+            f_desde = parse_date(fecha_desde_str)
+            if f_desde:
+                qs = qs.filter(fecha_creacion__date__gte=f_desde)
+
+        if fecha_hasta_str:
+            f_hasta = parse_date(fecha_hasta_str)
+            if f_hasta:
+                qs = qs.filter(fecha_creacion__date__lte=f_hasta)
+
+        base_qs = qs.select_related('creador', 'edificio', 'tecnico')
+        total_incidencias = base_qs.count()
+
+        # ── LOS 4 INDICADORES OPERATIVOS DE M6 ──
+        # 1. Tiempo Medio de Resolución (MTTR)
+        resueltas = list(base_qs.filter(estado__in=['resuelta', 'cerrada']))
+        total_resueltas = len(resueltas)
+
+        if total_resueltas > 0:
+            duraciones_segundos = [
+                max((inc.fecha_actualizacion - inc.fecha_creacion).total_seconds(), 0)
+                for inc in resueltas
+            ]
+            mttr_horas = round(sum(duraciones_segundos) / (total_resueltas * 3600), 1)
+        else:
+            mttr_horas = 0.0
+
+        # 2. Cumplimiento de SLA (%)
+        dentro_sla = 0
+        fuera_sla = 0
+        for inc in resueltas:
+            duracion_horas = (inc.fecha_actualizacion - inc.fecha_creacion).total_seconds() / 3600
+            sla_target = 4 if inc.prioridad == 'alta' else (24 if inc.prioridad == 'media' else 72)
+            if duracion_horas <= sla_target:
+                dentro_sla += 1
+            else:
+                fuera_sla += 1
+
+        if total_resueltas > 0:
+            cumplimiento_sla = round((dentro_sla / total_resueltas) * 100, 1)
+        else:
+            cumplimiento_sla = 100.0 if total_incidencias == 0 else 0.0
+
+        # 3. Casos Abiertos Acumulados
+        casos_abiertos_acumulados = base_qs.filter(estado__in=['pendiente', 'proceso']).count()
+
+        # 4. Tasa de Reapertura (%)
+        incidencias_reabiertas = EventoIncidencia.objects.filter(
+            incidencia__in=base_qs,
+            tipo='reapertura'
+        ).values('incidencia_id').distinct().count()
+
+        if total_incidencias > 0:
+            tasa_reapertura = round((incidencias_reabiertas / total_incidencias) * 100, 1)
+        else:
+            tasa_reapertura = 0.0
+
+        # Estadísticas para gráficos Chart.js
         por_categoria = list(base_qs.values('categoria').annotate(total=Count('id_incid')))
         nombres_cat = dict(Incidencia.CATEGORIAS)
         cat_labels = [nombres_cat.get(item['categoria'], item['categoria']) for item in por_categoria]
         cat_counts = [item['total'] for item in por_categoria]
 
-        # Estadísticas por Estado
         por_estado = list(base_qs.values('estado').annotate(total=Count('id_incid')))
         nombres_est = dict(Incidencia.ESTADOS)
         est_labels = [nombres_est.get(item['estado'], item['estado']) for item in por_estado]
         est_counts = [item['total'] for item in por_estado]
 
-        # Estadísticas por Prioridad
         por_prioridad = list(base_qs.values('prioridad').annotate(total=Count('id_incid')))
         nombres_prio = dict(Incidencia.PRIORIDADES)
         prio_labels = [nombres_prio.get(item['prioridad'], item['prioridad']) for item in por_prioridad]
         prio_counts = [item['total'] for item in por_prioridad]
 
+        sla_labels = ['Dentro de SLA', 'Fuera de SLA']
+        sla_counts = [dentro_sla, fuera_sla]
+
+        # Carga por Técnico
+        tecnicos_data = list(base_qs.exclude(tecnico_asignado__isnull=True).exclude(tecnico_asignado='').values('tecnico_asignado').annotate(total=Count('id_incid')).order_by('-total')[:6])
+        tec_labels = [item['tecnico_asignado'] for item in tecnicos_data]
+        tec_counts = [item['total'] for item in tecnicos_data]
+
+        if user.is_superuser:
+            total_edificios = Edificio.objects.count()
+            total_residentes = Perfil.objects.count()
+        elif edificio_usuario:
+            total_edificios = 1
+            total_residentes = Perfil.objects.filter(edificio=edificio_usuario).count()
+        else:
+            total_edificios = 0
+            total_residentes = 0
+
+        tecnicos_filtro_lista = Tecnico.objects.filter(activo=True)
+        if not user.is_superuser and edificio_usuario:
+            tecnicos_filtro_lista = tecnicos_filtro_lista.filter(Q(edificio=edificio_usuario) | Q(edificio__isnull=True))
+
         context.update({
+            # 4 Indicadores M6
+            'mttr_horas': mttr_horas,
+            'cumplimiento_sla': cumplimiento_sla,
+            'casos_abiertos_acumulados': casos_abiertos_acumulados,
+            'tasa_reapertura': tasa_reapertura,
+            'total_resueltas': total_resueltas,
+            'dentro_sla': dentro_sla,
+            'fuera_sla': fuera_sla,
+            'incidencias_reabiertas': incidencias_reabiertas,
+
+            # Filtros
+            'filtro_edificio': filtro_edificio,
+            'filtro_tecnico': filtro_tecnico,
+            'filtro_fecha_desde': fecha_desde_str,
+            'filtro_fecha_hasta': fecha_hasta_str,
+            'edificios_lista': edificios_lista,
+            'tecnicos_filtro_lista': tecnicos_filtro_lista,
+
+            # JSONs para Chart.js
             'cat_labels_json': json.dumps(cat_labels),
             'cat_counts_json': json.dumps(cat_counts),
             'est_labels_json': json.dumps(est_labels),
             'est_counts_json': json.dumps(est_counts),
             'prio_labels_json': json.dumps(prio_labels),
             'prio_counts_json': json.dumps(prio_counts),
-            'total_general': base_qs.count(),
+            'sla_labels_json': json.dumps(sla_labels),
+            'sla_counts_json': json.dumps(sla_counts),
+            'tec_labels_json': json.dumps(tec_labels),
+            'tec_counts_json': json.dumps(tec_counts),
+
+            'total_general': total_incidencias,
             'total_edificios': total_edificios,
             'total_residentes': total_residentes,
-            'ultimas_incidencias': base_qs.select_related('creador').order_by('-fecha_creacion')[:5],
-            'edificio_activo': edificio,
+            'ultimas_incidencias': base_qs.order_by('-fecha_creacion')[:8],
+            'edificio_activo': edificio_usuario,
         })
         return context
+
+
+def incidencia_estado_live(request, pk):
+    """
+    Endpoint de tiempo real para residentes y administradores (M6).
+    El residente ve el cambio de estado en pantalla en menos de 2 segundos sin recargar.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+
+    edificio = obtener_edificio_usuario(request)
+    if request.user.is_superuser:
+        qs = Incidencia.objects.all()
+    elif edificio:
+        perfil = getattr(request.user, 'perfil', None)
+        if perfil and perfil.rol in ('administrador', 'tecnico', 'auditor'):
+            qs = Incidencia.objects.del_edificio(edificio)
+        else:
+            qs = Incidencia.objects.del_edificio(edificio).filter(creador=request.user)
+    else:
+        qs = Incidencia.objects.none()
+
+    incidencia = get_object_or_404(qs, pk=pk)
+    return JsonResponse({
+        'id': incidencia.pk,
+        'estado': incidencia.estado,
+        'estado_display': incidencia.get_estado_display(),
+        'prioridad': incidencia.prioridad,
+        'prioridad_display': incidencia.get_prioridad_display(),
+        'tecnico_asignado': incidencia.tecnico_asignado or 'Sin técnico asignado',
+        'tecnico_disponibilidad': incidencia.tecnico.get_disponibilidad_display() if incidencia.tecnico else None,
+        'version': incidencia.version,
+        'fecha_actualizacion': incidencia.fecha_actualizacion.strftime('%d/%m/%Y %H:%M:%S'),
+        'timestamp': incidencia.fecha_actualizacion.timestamp(),
+    })
+
+
+class TecnicoListView(LoginRequiredMixin, ListView):
+    """
+    Gestión de Técnicos para reparaciones y control de disponibilidad (M6).
+    """
+    model = Tecnico
+    template_name = 'incidencias/tecnicos_list.html'
+    context_object_name = 'tecnicos'
+
+    def get_queryset(self):
+        edificio = obtener_edificio_usuario(self.request)
+        qs = Tecnico.objects.all().select_related('edificio')
+        if not self.request.user.is_superuser and edificio:
+            qs = qs.filter(Q(edificio=edificio) | Q(edificio__isnull=True))
+        return qs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form'] = TecnicoForm()
+        context['es_admin'] = es_administrador(self.request.user)
+        base_qs = self.get_queryset()
+        context['total_tecnicos'] = base_qs.count()
+        context['total_disponibles'] = base_qs.filter(disponibilidad='disponible', activo=True).count()
+        context['total_ocupados'] = base_qs.filter(disponibilidad='ocupado', activo=True).count()
+        context['total_no_disponibles'] = base_qs.filter(disponibilidad__in=['descanso', 'no_disponible']).count()
+        return context
+
+
+def cambiar_disponibilidad_tecnico(request, pk):
+    """Cambia rápidamente la disponibilidad de un técnico (M6)."""
+    if not request.user.is_authenticated or not es_administrador(request.user):
+        raise PermissionDenied("Solo administradores pueden cambiar la disponibilidad.")
+
+    if request.method == 'POST':
+        tecnico = get_object_or_404(Tecnico, pk=pk)
+        nueva_disp = request.POST.get('disponibilidad')
+        if nueva_disp in dict(Tecnico.DISPONIBILIDADES):
+            tecnico.disponibilidad = nueva_disp
+            tecnico.save(update_fields=['disponibilidad'])
+            messages.success(request, f"Disponibilidad de {tecnico.nombre} actualizada a '{tecnico.get_disponibilidad_display()}'.")
+        return redirect('tecnicos_list')
+    return redirect('tecnicos_list')
+
+
+class TecnicoCreateView(LoginRequiredMixin, CreateView):
+    """Creación de un nuevo técnico en el catálogo."""
+    model = Tecnico
+    form_class = TecnicoForm
+    template_name = 'incidencias/tecnico_form.html'
+    success_url = reverse_lazy('tecnicos_list')
+
+    def dispatch(self, request, *args, **kwargs):
+        if not es_administrador(request.user):
+            raise PermissionDenied("Solo administradores pueden registrar técnicos.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        messages.success(self.request, f"Técnico '{form.instance.nombre}' creado exitosamente.")
+        return super().form_valid(form)
 
 
 class PerfilView(LoginRequiredMixin, TemplateView):

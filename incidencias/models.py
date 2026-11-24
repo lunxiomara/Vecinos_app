@@ -1,3 +1,4 @@
+import django
 from django.db import models
 from django.db import router, transaction
 from django.contrib.auth.models import User
@@ -98,6 +99,62 @@ class Perfil(models.Model):
 
 
 # ─────────────────────────────────────────────
+# TÉCNICO (M6: entidad para gestión de reparaciones y disponibilidad)
+# ─────────────────────────────────────────────
+class Tecnico(models.Model):
+    id_tecnico    = models.AutoField(primary_key=True)
+    ESPECIALIDADES = [
+        ('plomeria',     'Fontanería / Agua'),
+        ('electricidad', 'Electricidad'),
+        ('limpieza',     'Limpieza'),
+        ('seguridad',    'Seguridad y Cerrajería'),
+        ('gas',          'Gas y Calefacción'),
+        ('ascensores',   'Ascensores y Maquinaria'),
+        ('general',      'Mantenimiento General'),
+        ('otros',        'Otros'),
+    ]
+
+    DISPONIBILIDADES = [
+        ('disponible',     'Disponible'),
+        ('ocupado',        'Ocupado'),
+        ('descanso',       'En Descanso'),
+        ('no_disponible',  'No Disponible'),
+    ]
+
+    nombre        = models.CharField(max_length=100, help_text="Nombre completo del técnico o especialista")
+    email         = models.EmailField(blank=True, default='', help_text="Correo de contacto")
+    telefono      = models.CharField(max_length=25, blank=True, default='', help_text="Teléfono o WhatsApp")
+    especialidad  = models.CharField(max_length=30, choices=ESPECIALIDADES, default='general')
+    disponibilidad = models.CharField(max_length=20, choices=DISPONIBILIDADES, default='disponible')
+    edificio      = models.ForeignKey(
+        Edificio, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='tecnicos',
+        help_text="Edificio base (dejar vacío si atiende todos los edificios)"
+    )
+    activo        = models.BooleanField(default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name        = "Técnico"
+        verbose_name_plural = "Técnicos"
+        ordering            = ['nombre']
+
+    def __str__(self):
+        return f"{self.nombre} ({self.get_especialidad_display()}) — {self.get_disponibilidad_display()}"
+
+    @property
+    def esta_disponible(self):
+        return self.activo and self.disponibilidad == 'disponible'
+
+    @property
+    def incidencias_activas_count(self):
+        return Incidencia.objects.filter(
+            models.Q(tecnico=self) | models.Q(tecnico_asignado=self.nombre),
+            estado__in=['pendiente', 'proceso']
+        ).count()
+
+
+# ─────────────────────────────────────────────
 # MANAGER con alcance por edificio
 # ─────────────────────────────────────────────
 class IncidenciaPorEdificioManager(models.Manager):
@@ -150,6 +207,12 @@ class Incidencia(models.Model):
         max_length=100, blank=True, null=True,
         help_text="Técnico o empresa responsable asignada"
     )
+    tecnico          = models.ForeignKey(
+        'Tecnico', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='incidencias',
+        help_text="Técnico asignado del catálogo de especialistas"
+    )
 
     # ── Datos de la incidencia ───────────────────────
     titulo           = models.CharField(max_length=150)
@@ -196,13 +259,25 @@ class Incidencia(models.Model):
             models.Index(fields=['estado'], name='idx_inc_estado'),
         ]
         constraints = [
-            models.CheckConstraint(
-                check=models.Q(estado__in=['pendiente', 'proceso', 'resuelta', 'cerrada']),
-                name='chk_inc_estado_valido'
+            (
+                models.CheckConstraint(
+                    condition=models.Q(estado__in=['pendiente', 'proceso', 'resuelta', 'cerrada']),
+                    name='chk_inc_estado_valido'
+                ) if django.VERSION >= (5, 1) else
+                models.CheckConstraint(
+                    check=models.Q(estado__in=['pendiente', 'proceso', 'resuelta', 'cerrada']),
+                    name='chk_inc_estado_valido'
+                )
             ),
-            models.CheckConstraint(
-                check=models.Q(prioridad__in=['baja', 'media', 'alta']),
-                name='chk_inc_prioridad_valida'
+            (
+                models.CheckConstraint(
+                    condition=models.Q(prioridad__in=['baja', 'media', 'alta']),
+                    name='chk_inc_prioridad_valida'
+                ) if django.VERSION >= (5, 1) else
+                models.CheckConstraint(
+                    check=models.Q(prioridad__in=['baja', 'media', 'alta']),
+                    name='chk_inc_prioridad_valida'
+                )
             ),
         ]
 

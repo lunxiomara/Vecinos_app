@@ -100,19 +100,29 @@ AXES_RESET_ON_SUCCESS       = True   # desbloquear al hacer login correcto
 AXES_WHITELIST_CALLABLE      = 'incidencias.auth.axes_whitelist_admin'
 
 
+import sys
+
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'vecinos',
-        'USER': 'root',
-        'PASSWORD': '',  # MariaDB XAMPP sin contraseña
-        'HOST': 'localhost',
-        'PORT': '3306',
+if 'test' in sys.argv or os.environ.get('DJANGO_DATABASE') == 'sqlite':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': 'vecinos',
+            'USER': 'root',
+            'PASSWORD': '',  # MariaDB XAMPP sin contraseña
+            'HOST': 'localhost',
+            'PORT': '3306',
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators

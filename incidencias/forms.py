@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User, Group
-from .models import Incidencia, Comentario, Perfil, Edificio
+from .models import Incidencia, Comentario, Perfil, Edificio, Tecnico
 
 class RegistroForm(forms.ModelForm):
     username = forms.CharField(label="Usuario", max_length=150, widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nombre de usuario'}))
@@ -75,14 +75,62 @@ class IncidenciaResidenteForm(forms.ModelForm):
 
 
 class IncidenciaAdminForm(forms.ModelForm):
+    tecnico = forms.ModelChoiceField(
+        queryset=Tecnico.objects.filter(activo=True),
+        required=False,
+        label="Seleccionar Técnico Registrado (por disponibilidad)",
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        empty_label="-- Seleccionar técnico del catálogo (opcional) --"
+    )
+
     class Meta:
         model = Incidencia
-        fields = ['estado', 'prioridad', 'tecnico_asignado', 'nota_interna']
+        fields = ['estado', 'prioridad', 'tecnico', 'tecnico_asignado', 'nota_interna']
         widgets = {
             'estado': forms.Select(attrs={'class': 'form-select'}),
             'prioridad': forms.Select(attrs={'class': 'form-select'}),
-            'tecnico_asignado': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nombre o empresa del técnico'}),
-            'nota_interna': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'Notas privadas visibles únicamente por administradores...'}),
+            'tecnico_asignado': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'O escribir nombre/empresa externa del técnico'
+            }),
+            'nota_interna': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'placeholder': 'Notas privadas visibles únicamente por administradores...'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Custom label for each technician showing specialty and availability
+        self.fields['tecnico'].label_from_instance = lambda obj: (
+            f"{obj.nombre} — {obj.get_especialidad_display()} [{obj.get_disponibilidad_display()}]"
+        )
+        if self.instance and self.instance.pk and self.instance.tecnico:
+            self.fields['tecnico'].initial = self.instance.tecnico
+
+    def clean(self):
+        cleaned_data = super().clean()
+        tecnico = cleaned_data.get('tecnico')
+        tecnico_asignado = cleaned_data.get('tecnico_asignado')
+
+        if tecnico and not tecnico_asignado:
+            cleaned_data['tecnico_asignado'] = tecnico.nombre
+        return cleaned_data
+
+
+class TecnicoForm(forms.ModelForm):
+    class Meta:
+        model = Tecnico
+        fields = ['nombre', 'especialidad', 'disponibilidad', 'telefono', 'email', 'edificio', 'activo']
+        widgets = {
+            'nombre': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. Carlos Martínez'}),
+            'especialidad': forms.Select(attrs={'class': 'form-select'}),
+            'disponibilidad': forms.Select(attrs={'class': 'form-select'}),
+            'telefono': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '+57 300 123 4567'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'carlos@tecnicos.com'}),
+            'edificio': forms.Select(attrs={'class': 'form-select'}),
+            'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
 

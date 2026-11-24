@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Edificio, Unidad, Perfil, Incidencia, Comentario, EventoIncidencia, OutboxMessage
+from .models import Edificio, Unidad, Perfil, Incidencia, Comentario, EventoIncidencia, OutboxMessage, Tecnico
 
 
 # ─────────────────────────────────────────────
@@ -103,6 +103,13 @@ class EventoIncidenciaAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(Tecnico)
+class TecnicoAdmin(admin.ModelAdmin):
+    list_display  = ('nombre', 'especialidad', 'disponibilidad', 'telefono', 'email', 'edificio', 'activo')
+    list_filter   = ('disponibilidad', 'especialidad', 'activo', 'edificio')
+    search_fields = ('nombre', 'email', 'telefono')
 
 
 @admin.register(OutboxMessage)

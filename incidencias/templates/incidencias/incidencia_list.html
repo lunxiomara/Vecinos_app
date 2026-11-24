@@ -20,7 +20,16 @@
             {% endif %}
         </p>
     </div>
-    {% if not es_admin %}
+    {% if es_admin %}
+    <div class="d-flex gap-2">
+        <a href="{% url 'tecnicos_list' %}" class="btn btn-outline-primary shadow-sm">
+            <i class="bi bi-tools me-1"></i> Técnicos y Arreglos
+        </a>
+        <a href="{% url 'dashboard' %}" class="btn btn-primary shadow-sm">
+            <i class="bi bi-speedometer2 me-1"></i> Panel M6
+        </a>
+    </div>
+    {% elif not es_admin %}
     <div>
         <a href="{% url 'incidencia_create' %}" class="btn btn-primary shadow-sm">
             <i class="bi bi-plus-lg me-1"></i> Reportar Incidencia
@@ -130,7 +139,9 @@
                             </div>
                             <div class="d-flex justify-content-between align-items-center">
                                 <span><i class="bi bi-person me-1"></i>{{ inc.creador.first_name|default:inc.creador.username }}</span>
-                                {% if inc.tecnico_asignado %}
+                                {% if inc.tecnico %}
+                                    <span class="badge badge-{{ inc.tecnico.disponibilidad }} border"><i class="bi bi-wrench me-1"></i>{{ inc.tecnico.nombre }}</span>
+                                {% elif inc.tecnico_asignado %}
                                     <span class="badge bg-light text-dark border"><i class="bi bi-wrench me-1"></i>{{ inc.tecnico_asignado }}</span>
                                 {% endif %}
                             </div>

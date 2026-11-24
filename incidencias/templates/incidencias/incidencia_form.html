@@ -59,10 +59,21 @@
                                 {{ form.prioridad }}
                                 {% if form.prioridad.errors %}<div class="text-danger small mt-1">{{ form.prioridad.errors }}</div>{% endif %}
                             </div>
-                            <div class="col-12">
-                                <label class="form-label fw-semibold small">Técnico o Empresa Asignada</label>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">
+                                    <i class="bi bi-tools text-primary me-1"></i> Asignar Técnico (por Disponibilidad)
+                                </label>
+                                {{ form.tecnico }}
+                                {% if form.tecnico.errors %}<div class="text-danger small mt-1">{{ form.tecnico.errors }}</div>{% endif %}
+                                <div class="form-text small">Muestra su especialidad y disponibilidad actual.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">
+                                    <i class="bi bi-building-gear me-1"></i> O Nombre / Empresa Externa
+                                </label>
                                 {{ form.tecnico_asignado }}
                                 {% if form.tecnico_asignado.errors %}<div class="text-danger small mt-1">{{ form.tecnico_asignado.errors }}</div>{% endif %}
+                                <div class="form-text small">Contratista externo o empresa responsable del arreglo.</div>
                             </div>
                             <div class="col-12">
                                 <label class="form-label fw-semibold small">Nota Interna (Solo administradores)</label>

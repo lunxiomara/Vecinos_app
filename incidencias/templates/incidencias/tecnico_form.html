@@ -1,0 +1,78 @@
+{% extends 'incidencias/base.html' %}
+
+{% block title %}Registrar Técnico - VecinosApp{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7 col-md-9">
+        <div class="card card-custom p-4 bg-white shadow-sm border">
+            <div class="d-flex align-items-center mb-3">
+                <div class="badge bg-primary bg-opacity-10 text-primary p-3 rounded-circle me-3">
+                    <i class="bi bi-tools fs-4"></i>
+                </div>
+                <div>
+                    <h4 class="fw-bold mb-0 text-dark">Registrar Especialista Técnico</h4>
+                    <p class="text-muted small mb-0">Agrega un técnico al catálogo para asignación de arreglos e incidencias.</p>
+                </div>
+            </div>
+
+            <hr class="my-3">
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Nombre Completo <span class="text-danger">*</span></label>
+                    {{ form.nombre }}
+                    {% if form.nombre.errors %}
+                        <div class="text-danger small mt-1">{{ form.nombre.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small">Especialidad Principal <span class="text-danger">*</span></label>
+                        {{ form.especialidad }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small">Disponibilidad Inicial <span class="text-danger">*</span></label>
+                        {{ form.disponibilidad }}
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small">Teléfono / WhatsApp</label>
+                        {{ form.telefono }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small">Correo Electrónico</label>
+                        {{ form.email }}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Edificio Base Asignado</label>
+                    {{ form.edificio }}
+                    <div class="form-text small">Dejar vacío si el técnico atiende todos los edificios de la copropiedad.</div>
+                </div>
+
+                <div class="form-check form-switch mb-4">
+                    {{ form.activo }}
+                    <label class="form-check-label small fw-semibold" for="{{ form.activo.id_for_label }}">
+                        Técnico activo en la plataforma
+                    </label>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{% url 'tecnicos_list' %}" class="btn btn-outline-secondary btn-sm px-3">
+                        Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-sm px-4 fw-semibold shadow-sm">
+                        <i class="bi bi-save me-1"></i> Guardar Técnico
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
